@@ -5,7 +5,7 @@ const elements=(node:Element|Document,name:string)=>Array.from(node.getElementsB
 const first=(node:Element|Document,name:string)=>elements(node,name)[0];
 const value=(node:Element|undefined,attribute:string,fallback=0)=>Number(node?.getAttribute(attribute)||fallback);
 const parse=(bytes:Uint8Array)=>new DOMParser().parseFromString(decoder.decode(bytes),'application/xml');
-function relative(base:string,target:string){const parts=base.split('/').slice(0,-1);for(const part of target.split('/')){if(part==='..')parts.pop();else if(part!=='.')parts.push(part);}return parts.join('/');}
+function relative(base:string,target:string){if(target.startsWith('/'))return target.slice(1);const parts=base.split('/').slice(0,-1);for(const part of target.split('/')){if(part==='..')parts.pop();else if(part!=='.')parts.push(part);}return parts.join('/');}
 function dataUrl(bytes:Uint8Array,path:string){const extension=path.split('.').pop()?.toLowerCase();const mime=extension==='png'?'image/png':extension==='jpg'||extension==='jpeg'?'image/jpeg':extension==='gif'?'image/gif':extension==='webp'?'image/webp':null;if(!mime)return '';let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return `data:${mime};base64,${btoa(binary)}`;}
 
 export async function parsePowerPoint(file:File):Promise<Deck>{
@@ -15,6 +15,8 @@ export async function parsePowerPoint(file:File):Promise<Deck>{
   const presentation=parse(files['ppt/presentation.xml']);const size=first(presentation,'sldSz');
   const width=value(size,'cx',12192000)/9525,height=value(size,'cy',6858000)/9525;
   const slidePaths=Object.keys(files).filter(path=>/^ppt\/slides\/slide\d+\.xml$/.test(path)).sort((a,b)=>Number(a.match(/slide(\d+)/)?.[1])-Number(b.match(/slide(\d+)/)?.[1]));
+  const rels=files['ppt/_rels/presentation.xml.rels'];
+  if(rels){const targets=new Map(elements(parse(rels),'Relationship').filter(rel=>rel.getAttribute('TargetMode')!=='External').map(rel=>[rel.getAttribute('Id'),relative('ppt/presentation.xml',rel.getAttribute('Target')||'')]));const ordered=elements(presentation,'sldId').map(slide=>targets.get(slide.getAttribute('r:id'))).filter((path):path is string=>!!path&&!!files[path]);if(ordered.length)slidePaths.splice(0,slidePaths.length,...ordered);}
   if(!slidePaths.length||slidePaths.length>200)throw new Error('Choose a PowerPoint with between 1 and 200 slides.');
   const slides=slidePaths.map(path=>{
     const doc=parse(files[path]);const slide:DeckElement[]=[];const relationships:Record<string,string>={};const relPath=path.replace('slides/','slides/_rels/')+'.rels';

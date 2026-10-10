@@ -27,9 +27,10 @@ export default function World(props:Props){
       if(s.blocked){keys.clear();path=[];}
       if(!local.moving)local.seated=s.me.seated;
       let dx=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));let dy=Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'));
-      if(!dx&&!dy&&path.length){const next=path[0],dist=Math.hypot(next.x-local.x,next.y-local.y);if(dist<6)path.shift();else{dx=(next.x-local.x)/dist;dy=(next.y-local.y)/dist;}}
+      let travel=dt*220;
+      if(!dx&&!dy&&path.length){const next=path[0],dist=Math.hypot(next.x-local.x,next.y-local.y);if(dist<0.01)path.shift();else{travel=Math.min(travel,dist);dx=(next.x-local.x)/dist;dy=(next.y-local.y)/dist;}}
       const length=Math.hypot(dx,dy);local.moving=length>0&&!s.blocked;
-      if(local.moving){local.seated=false;dx=dx/length*dt*220;dy=dy/length*dt*220;const oldX=local.x,oldY=local.y;if(canStand(local.x+dx,local.y))local.x+=dx;if(canStand(local.x,local.y+dy))local.y+=dy;if(Math.abs(dx)>Math.abs(dy))local.direction=dx>0?'right':'left';else local.direction=dy>0?'down':'up';if(local.x===oldX&&local.y===oldY){path=[];local.moving=false;}}
+      if(local.moving){local.seated=false;dx=dx/length*travel;dy=dy/length*travel;const oldX=local.x,oldY=local.y;if(canStand(local.x+dx,local.y))local.x+=dx;if(canStand(local.x,local.y+dy))local.y+=dy;if(Math.abs(dx)>Math.abs(dy))local.direction=dx>0?'right':'left';else local.direction=dy>0?'down':'up';if(local.x===oldX&&local.y===oldY){path=[];local.moving=false;}}
       if((local.moving&&now-lastSend>85)||local.moving!==previousMoving){lastSend=now;state.current.onMove({...local});}previousMoving=local.moving;
       const near=nearbyFixture(local.x,local.y);if((near?.id||'')!==lastNear){lastNear=near?.id||'';s.onNearby(near);}
       scale=Math.min(w/WORLD.width,h/WORLD.height)*s.zoom;const halfW=w/scale/2,halfH=h/scale/2;
