@@ -22,7 +22,7 @@ Open `http://localhost:5173` in two browser windows, enter different names, and 
 ## Included behavior
 
 - Landing page → avatar builder → public room, room-code join, or room creation. An optional password makes a room private.
-- Original animated avatars with skin, hair, hairstyle, and outfit choices. Your avatar preferences are saved on this device.
+- Original articulated avatars with shaded clothing, three hair silhouettes, front/back/side turning, distance-driven footsteps, breathing, blinking, hair sway, seated poses, hand raising, waving, clapping, and celebration. The builder previews Idle, Walk, Turn, Sit, and Wave. Your skin, hair, hairstyle, and outfit preferences are saved on this device.
 - Nine spacious rooms on a 3600 × 2600 campus: Forum, Idea Studio, Quiet Garden, Focus Lab, Welcome Hub, Commons, Orbit Room, Project Lab, and Reading Lounge. Each room has eight usable chairs (72 seats); the existing 12-participant campus limit remains.
 - Continuous WASD/arrow movement, click-to-walk pathfinding, collision with walls and furniture, camera following, zoom, minimap, and room navigation.
 - Shared participant presence, room chat and temporary speech bubbles, raised hands, reactions, chair interaction, and a coffee interaction.

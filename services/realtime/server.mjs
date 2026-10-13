@@ -111,7 +111,7 @@ export function createOfficeServer() {
           }
           case 'status': {
             for (const key of ['hand', 'mic', 'camera', 'sharing']) if (typeof message[key] === 'boolean') p[key] = message[key];
-            if (typeof message.reaction === 'string' && ['👏', '💜', '🎉', '👍', '💡'].includes(message.reaction)) { p.reaction = message.reaction; p.reactionAt = now; }
+            if (typeof message.reaction === 'string' && ['👋', '👏', '💜', '🎉', '👍', '💡'].includes(message.reaction)) { p.reaction = message.reaction; p.reactionAt = now; }
             broadcast(room, { type: 'player', player: p }); break;
           }
           case 'chat': {

@@ -11,3 +11,9 @@ To add a component:
 3. Register it in `index.ts`. Animation frames include shared interaction progress, occupancy, lamp state, proximity, and reduced motion.
 4. Bind the activity in `../../App.tsx`; shared interactions are validated and broadcast by the room server. Effects run in the existing canvas loop, never in component timers.
 5. Run `pnpm test`, `pnpm lint`, and `pnpm build`. Reachability tests check every room, interactive fixture, and all 72 seats.
+
+## Avatar rig
+
+`Avatar.ts` assembles the character; `AvatarBody.ts`, `AvatarFace.ts`, and `AvatarHair.ts` draw its articulated limbs, expressions, clothing, and hair. `AvatarPaint.ts` supplies the material helpers. `AvatarMotion.ts` owns an independent pose per participant, advances strides from traveled distance, and eases turns, stops, sitting, and gestures. Shared reaction timestamps drive waving, clapping, and celebration. Motion state is pruned on departure and released with the scene.
+
+The avatar builder uses the same renderer and controller for Idle, Walk, Turn, Sit, and Wave previews. Preview loops keep a props-ref bridge, cancel their animation frame on unmount, and remove the reduced-motion preference listener. Reduced motion preserves the pose without breathing, blinking, sway, or repeating turns. The footer uses a face portrait crop.

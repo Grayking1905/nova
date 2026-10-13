@@ -49,3 +49,9 @@
 .room-activities{position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:3px;padding:5px 7px;border:1px solid #6e796777;border-radius:10px;background:#273139ee;backdrop-filter:blur(10px);box-shadow:0 5px 16px #17242130;z-index:3}
 .room-activities>span{font-size:6px;letter-spacing:1px;color:#aebba5;font-weight:700;margin-right:5px}.room-activities>button{display:grid;place-items:center;width:27px;height:27px;background:transparent;border:1px solid transparent;border-radius:7px;color:#c9d1bd}.room-activities>button:hover{background:#78826a44;border-color:#89997560;color:#f3edcf}.room-activities>button:focus-visible{outline:2px solid #c3a9e8;outline-offset:2px}
 @media(max-width:1150px){.room-activities{bottom:61px}}
+/* Avatar animation previews */
+.avatar-pose-controls{display:flex;justify-content:center;gap:4px;margin:2px 0 12px;padding:4px;border:1px solid #5d496b66;border-radius:9px;background:#2d2238}
+.avatar-pose-controls>button{flex:1;border:1px solid transparent;border-radius:6px;padding:6px 3px;background:transparent;font-size:9px;color:#9e8daf;text-transform:capitalize}
+.avatar-pose-controls>button:hover{background:#45314e;color:#ddc9ef}.avatar-pose-controls>button.chosen{border-color:#8d6ca866;background:#64477866;color:#e7d5f6;box-shadow:0 1px 4px #120a2320}
+.avatar-pose-controls>button:focus-visible{outline:2px solid #cbb0ef;outline-offset:2px}
+.avatar-preview-caption{display:block;text-align:center;font-size:7px;letter-spacing:1.7px;color:#a493bb;margin:0 0 8px}
