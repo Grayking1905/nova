@@ -18,7 +18,8 @@ export default function World(props:Props){
     const resize=()=>{const b=canvas.getBoundingClientRect();w=b.width;h=b.height;const dpr=Math.min(window.devicePixelRatio,2);canvas.width=w*dpr;canvas.height=h*dpr;};
     const observer=new ResizeObserver(resize);observer.observe(canvas);resize();
     const keydown=(event:KeyboardEvent)=>{
-      if(state.current.blocked||(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable=true]'))return;
+      if(state.current.blocked||document.querySelector('dialog[open]')||(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable=true]'))return;
+      if(event.key===' '&&(event.target as HTMLElement)?.closest('button,a'))return;
       const key=event.key.toLowerCase();if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)){event.preventDefault();keys.add(key);path=[];state.current.onCancelNavigate();}
       if(key==='e'&&!event.repeat){const f=nearbyFixture(local.x,local.y);if(f)state.current.onInteract(f);}
       if(key==='enter'&&!(event.target as HTMLElement)?.closest('button')){event.preventDefault();state.current.onChat();}
@@ -29,7 +30,7 @@ export default function World(props:Props){
     const frame=(now:number)=>{
       const dt=Math.min((now-last)/1000,.035);last=now;const s=state.current;
       if(s.target&&s.target.nonce!==targetNonce){targetNonce=s.target.nonce;path=findPath(local,s.target);}
-      if(s.blocked){keys.clear();path=[];}
+      if(s.blocked||document.querySelector('dialog[open]')){keys.clear();path=[];}
       if(s.me.seatId!==lastSeat){lastSeat=s.me.seatId;local.seatId=s.me.seatId;local.seated=s.me.seated;if(s.me.seatId){local.x=s.me.x;local.y=s.me.y;path=[];keys.clear();}}
       let dx=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));let dy=Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'));
       let travel=dt*340;
@@ -43,9 +44,9 @@ export default function World(props:Props){
       const focusX=roomFits?zone.x+zone.w/2:local.x,focusY=roomFits?zone.y+zone.h/2:local.y;
       const aimX=halfW>=WORLD.width/2?WORLD.width/2:Math.min(WORLD.width-halfW,Math.max(halfW,focusX));const aimY=halfH>=WORLD.height/2?WORLD.height/2:Math.min(WORLD.height-halfH,Math.max(halfH,focusY));camX+=(aimX-camX)*Math.min(1,dt*7);camY+=(aimY-camY)*Math.min(1,dt*7);
       const dpr=Math.min(window.devicePixelRatio,2);context.setTransform(dpr,0,0,dpr,0,0);context.fillStyle='#142329';context.fillRect(0,0,w,h);context.translate(w/2,h/2);context.scale(scale,scale);context.translate(-camX,-camY);context.drawImage(backdrop,0,0);
-      drawConversationRange(context,local.x,local.y,s.presentationZone);
+      if(!s.me.availability||s.me.availability==='available')drawConversationRange(context,local.x,local.y,s.presentationZone);
       drawPathTrail(context,local,path);
-      const rendered=s.players.map(p=>{if(p.id===local.id)return {...p,...local,hand:p.hand,reaction:p.reaction,reactionAt:p.reactionAt,mic:p.mic};let pos=remote.get(p.id);if(!pos){pos={x:p.x,y:p.y};remote.set(p.id,pos);}pos.x+=(p.x-pos.x)*Math.min(1,dt*14);pos.y+=(p.y-pos.y)*Math.min(1,dt*14);return {...p,...pos};}).sort((a,b)=>a.y-b.y);
+      const rendered=s.players.map(p=>{if(p.id===local.id)return {...p,x:local.x,y:local.y,direction:local.direction,moving:local.moving,seated:local.seated,seatId:local.seatId};let pos=remote.get(p.id);if(!pos){pos={x:p.x,y:p.y};remote.set(p.id,pos);}pos.x+=(p.x-pos.x)*Math.min(1,dt*14);pos.y+=(p.y-pos.y)*Math.min(1,dt*14);return {...p,...pos};}).sort((a,b)=>a.y-b.y);
       scene.draw(context,rendered,s.me.id,now,s.interactions,s.fixtureStates,reducedMotion,{left:camX-halfW,top:camY-halfH,right:camX+halfW,bottom:camY+halfH},id=>s.messages.findLast(m=>m.playerId===id&&Date.now()-m.time<4500)?.text);
       if(near)drawInteraction(context,near,now,reducedMotion);
       animation=requestAnimationFrame(frame);

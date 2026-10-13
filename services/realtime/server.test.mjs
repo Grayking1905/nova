@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { createOfficeServer } from './server.mjs';
-import { SPAWN, fixtures, WORLD, interactionPoint } from '../../apps/desktop/src/world/map.ts';
+import { SPAWN, fixtures, WORLD, interactionPoint, audible } from '../../apps/desktop/src/world/map.ts';
 
 async function setup(t) { const service=createOfficeServer();await new Promise(resolve=>service.server.listen(0,'127.0.0.1',resolve));t.after(()=>service.close());const address=`127.0.0.1:${service.server.address().port}`;return {service,address,base:`http://${address}`}; }
 async function client(address,options={}) {
@@ -78,4 +78,46 @@ test('boards keep separate drawings and presentations remember their spatial roo
   b.send({type:'clear-board',boardId:'board'});await a.wait('clear-board');
   a.send({type:'presentation',source:{kind:'screen',url:'',name:'Orbit screen',page:1,zoneId:'meeting'}});assert.equal((await b.wait('presentation')).source.zoneId,'meeting');
   const d=await client(address);const dw=await d.wait('welcome');assert.equal(dw.boards['meeting-board'].length,1);assert.equal(dw.presentation.zoneId,'meeting');
+});
+
+test('direct messages and replies reach only their participants, including welcome history',async t=>{
+  const {address}=await setup(t);
+  const a=await client(address,{profile:{name:'Alice'}}),aw=await a.wait('welcome');
+  const b=await client(address,{profile:{name:'Bob'}}),bw=await b.wait('welcome');
+  const c=await client(address,{profile:{name:'Charlie'}});await c.wait('welcome');
+  a.send({type:'chat',text:'A private hello',recipientId:bw.id});
+  const direct=(await b.wait('chat')).message;assert.equal(direct.recipientId,bw.id);assert.equal((await a.wait('chat')).message.id,direct.id);
+  a.send({type:'status',statusText:'Barrier'});await c.wait('player');
+  assert.ok(!c.queue.some(m=>m.type==='chat'));
+  const late=await client(address);assert.ok(!(await late.wait('welcome')).messages.some(m=>m.id===direct.id));
+  b.send({type:'chat',text:'Reply just for Alice',recipientId:aw.id,replyTo:direct.id});
+  assert.equal((await a.wait('chat')).message.replyTo,direct.id);await b.wait('chat');
+  c.send({type:'chat',text:'Try to leak a reply',replyTo:direct.id});c.send({type:'status',statusText:'Checked'});await c.wait('player');
+  assert.ok(!a.queue.some(m=>m.type==='chat'&&m.message.text==='Try to leak a reply'));
+  await new Promise(resolve=>setTimeout(resolve,320));
+  a.send({type:'chat',text:'Room discussion',zoneId:'studio'});const publicMessage=(await c.wait('chat')).message;assert.equal(publicMessage.zoneId,'studio');assert.equal(publicMessage.recipientId,undefined);
+  const next=await client(address);const history=(await next.wait('welcome')).messages;assert.equal(history.length,1);assert.equal(history[0].text,'Room discussion');
+});
+
+test('availability is shared and pauses proximity audio while profile edits stay sanitized',async t=>{
+  const {address}=await setup(t);const a=await client(address);await a.wait('welcome');const b=await client(address);await b.wait('welcome');await a.wait('player');
+  a.send({type:'status',availability:'focus',statusText:'x'.repeat(80)});const focused=(await b.wait('player')).player;assert.equal(focused.availability,'focus');assert.equal(focused.statusText.length,60);
+  assert.equal(audible(focused,{...focused,availability:'available'}),false);
+  a.send({type:'status',availability:'invalid'});assert.equal((await b.wait('player')).player.availability,'focus');
+  a.send({type:'profile',profile:{name:'Updated',shirt:'#123456',hair:'bad',style:'curly',x:0,availability:'available'}});const edited=(await b.wait('player')).player;assert.equal(edited.name,'Updated');assert.equal(edited.shirt,'#123456');assert.equal(edited.hair,'#302332');assert.equal(edited.availability,'focus');assert.equal(edited.x,focused.x);
+  a.send({type:'status',availability:'available'});const available=(await b.wait('player')).player;assert.equal(audible(available,available),true);
+});
+
+test('shared agenda and room notes validate entries, synchronize late joins, and enforce author deletion',async t=>{
+  const {address,service}=await setup(t);const a=await client(address,{profile:{name:'Planner'}}),aw=await a.wait('welcome');const b=await client(address);await b.wait('welcome');
+  a.send({type:'event-create',title:'Team ideas',startAt:Date.now()+3600000,duration:30,zoneId:'studio'});const event=(await b.wait('events')).events[0];await a.wait('events');assert.equal(event.creatorId,aw.id);
+  b.send({type:'event-delete',id:event.id});assert.equal((await a.wait('events')).events.length,1);await b.wait('events');
+  a.send({type:'event-create',title:'Invalid',startAt:0,duration:30,zoneId:'studio'});assert.match((await a.wait('error')).message,/meeting time/);
+  a.send({type:'note-create',text:'Next step: prototype the idea.',zoneId:'studio'});const note=(await b.wait('notes')).notes[0];await a.wait('notes');
+  b.send({type:'note-delete',id:note.id});assert.equal((await a.wait('notes')).notes.length,1);await b.wait('notes');
+  const late=await client(address);const welcome=await late.wait('welcome');assert.equal(welcome.events[0].id,event.id);assert.equal(welcome.notes[0].id,note.id);
+  a.send({type:'event-delete',id:event.id});assert.equal((await b.wait('events')).events.length,0);await a.wait('events');
+  a.send({type:'note-delete',id:note.id});assert.equal((await b.wait('notes')).notes.length,0);await a.wait('notes');
+  const room=service.rooms.get('nova-campus');room.notes=Array.from({length:100},(_,i)=>({...note,id:String(i)}));
+  await new Promise(resolve=>setTimeout(resolve,520));a.send({type:'note-create',text:'Latest decision',zoneId:'meeting'});const bounded=(await b.wait('notes')).notes;assert.equal(bounded.length,100);assert.equal(bounded.at(-1).zoneId,'meeting');assert.equal(bounded.at(-1).text,'Latest decision');
 });

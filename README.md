@@ -25,7 +25,9 @@ Open `http://localhost:5173` in two browser windows, enter different names, and 
 - Original articulated avatars with shaded clothing, three hair silhouettes, front/back/side turning, distance-driven footsteps, breathing, blinking, hair sway, seated poses, hand raising, waving, clapping, and celebration. The builder previews Idle, Walk, Turn, Sit, and Wave. Your skin, hair, hairstyle, and outfit preferences are saved on this device.
 - Nine spacious rooms on a 3600 × 2600 campus: Forum, Idea Studio, Quiet Garden, Focus Lab, Welcome Hub, Commons, Orbit Room, Project Lab, and Reading Lounge. Each room has eight usable chairs (72 seats); the existing 12-participant campus limit remains.
 - Continuous WASD/arrow movement, click-to-walk pathfinding, collision with walls and furniture, camera following, zoom, minimap, and room navigation.
-- Shared participant presence, room chat and temporary speech bubbles, raised hands, reactions, chair interaction, and a coffee interaction.
+- Shared participant presence, campus and per-room chat channels, direct messages, contextual replies, recent activity notifications, temporary speech bubbles, raised hands, and reactions. DMs are delivered only to their two participants and excluded from other participants’ join history. Conversation history is limited to the latest 100 messages per campus and identities last for the current connection.
+- Availability (available, focus, away), a custom status message, teammate search, walk-to-person and follow controls. Focus/away pauses proximity audio and camera transmission without turning off your local devices. Move manually to stop following.
+- A shared campus agenda with named meetings, start times, room selection, 15–120 minute durations, and calendar-file downloads. Shared room notes can be added, removed by their author, and exported as Markdown. These are manually written notes.
 - Native WebRTC microphone/camera connections within proximity and the same room. Participants in the Forum, Idea Studio, Orbit Room, and Project Lab have room-wide audio. Tracks are removed from distant peer connections. Incoming audio can be muted independently.
 - Shared whiteboard with pen colors, thickness, clear confirmation, and PNG export.
 - Shared PDF, image, and PPTX presentations with presenter-owned page controls. PPTX previews support text, raster images, and basic solid shapes; themes, masters, charts, transitions, animations, and exact PowerPoint typography are not reproduced. Share the PowerPoint window for exact playback or legacy `.ppt` files.
@@ -55,7 +57,7 @@ pnpm server
 pnpm --filter @spatialmeet/desktop start
 ```
 
-The build includes TypeScript checks. Tests exercise two-client synchronization, room isolation/passwords, uploads and presentation ownership, whiteboard events, disconnects, collision routes between every room, and proximity boundaries.
+The build includes TypeScript checks. Tests exercise two-client synchronization, room isolation/passwords, uploads and presentation ownership, whiteboard events, disconnects, collision routes between every room, proximity boundaries, direct-message/reply privacy, availability and profile updates, shared agenda/notes ownership, late joins, and bounded notes history.
 
 ## Campus components and interactions
 
@@ -69,6 +71,14 @@ Each spatial model lives in `apps/desktop/src/world/components`, with its own dr
 
 After updating from the original smaller map, restart `pnpm dev` so the server uses the expanded bounds and spawn location.
 
+## Interface and Gather inspiration
+
+The interface uses the campus’s ivory, sage, lavender, clay, and powder blue colors throughout. The welcome page, character builder, illustrated room cards, searchable people panel, conversation bubbles, agenda, dialogs, and meeting controls share rounded materials, subtle shadows, and tactile feedback. Day and dusk themes are saved on this device. Focus view hides the collaboration panel to give the world more room. Animations respect reduced motion. Avatar appearance can be changed while inside the workplace; closing the editor discards its draft.
+
+UI components are separated into `WelcomeScreen`, `AvatarEditor`, `AvatarEditorDialog`, `RoomIllustration`, `WorkspacePanel`, and `CampusAgenda`. Styles are in `apps/desktop/src/ui.css`; spatial objects and animations remain individually implemented in `apps/desktop/src/world/components`.
+
+[Gather’s current feature list](https://www.gather.town/features) informed the collaboration direction. Nova now includes spatial presence, proximity calls, room audio, screen and file presentations, reactions, direct messages, room channels, replies, availability, follow controls, manual shared notes, meeting planning, and theme selection. It does **not** yet have full Gather feature parity. AI transcription/notes, meeting recording, simultaneous screen presenters, custom public/private channels and group messages, a live office editor, desk ownership, desktop Mini Mode, Google Calendar/Spotify/GitHub integrations, durable message history, accounts, and production administration still need implementation. The current focus view is an in-app panel toggle, and calendar export creates an `.ics` file; neither is an external integration.
+
 ## Architecture
 
 - `apps/desktop/src/world`: campus geometry, cached navigation grid, original drawing, and the animation loop.
@@ -81,7 +91,7 @@ After updating from the original smaller map, restart `pnpm dev` so the server u
 
 ## Hosting and current limits
 
-This is a working local development application, not a deployed service. Rooms, chat, boards, and uploaded files live in server memory. Restarting the server clears them; custom rooms expire after the last participant leaves. Rooms are capped at 12 participants and uploads at 20 MB each / 8 files per room.
+This is a working local development application, not a deployed service. Rooms, chat, agendas, shared notes, boards, and uploaded files live in server memory. Restarting the server clears them; custom rooms expire after the last participant leaves. Rooms are capped at 12 participants and uploads at 20 MB each / 8 files per room. Agendas hold up to 80 meetings (past entries are pruned when a meeting is added); note history holds the latest 100 notes. Author permissions use connection identities rather than persistent accounts.
 
 For a shared network deployment, set `HOST=0.0.0.0` on the room server, expose it behind HTTPS/WSS, and set `VITE_ROOM_SERVER` in `apps/desktop/.env.local` before building. Use a reachable HTTPS frontend URL for invitations; localhost invites only work on the same computer. Browser mic/camera require a secure context (HTTPS or localhost).
 
