@@ -6,11 +6,11 @@ function label(c:CanvasRenderingContext2D,text:string,x:number,y:number,size:num
 
 
 export function drawPlayerLabel(c:CanvasRenderingContext2D,p:Player,me:boolean,_tick:number,bubble?:string){
-  const name=p.name+(me?' · you':'');c.font='600 13px "Segoe UI"';const width=c.measureText(name).width+22;
+  const name=p.name+(me?' · you':'')+(p.availability==='focus'?' · ☾':p.availability==='away'?' · ◌':'');c.font='600 13px "Segoe UI"';const width=c.measureText(name).width+22;
   box(c,p.x-width/2,p.y+17,width,24,8,me?'#7862c9':'#263348e8');label(c,name,p.x,p.y+34,13,'#fff');
 
   if(p.reaction&&Date.now()-p.reactionAt<3500)label(c,p.reaction,p.x,p.y-120-Math.min(30,(Date.now()-p.reactionAt)/70),31,'#fff');
-  if(p.mic){ellipse(c,p.x+width/2+7,p.y+28,4,4,'#52dca6');}
+  if(p.mic&&(!p.availability||p.availability==='available')){ellipse(c,p.x+width/2+7,p.y+28,4,4,'#52dca6');}
   if(bubble){const text=bubble.length>38?bubble.slice(0,38)+'…':bubble;c.font='13px "Segoe UI"';const bw=c.measureText(text).width+24;box(c,p.x-bw/2,p.y-142,bw,29,9,'#fffdf3','#c9c7db');label(c,text,p.x,p.y-122,13,'#3d3755',500);}
 }
 

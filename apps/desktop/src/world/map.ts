@@ -95,7 +95,7 @@ export function fixtureDistance(f:Fixture,x:number,y:number) {return Math.hypot(
 export function interactionPoint(f:Fixture) {if(f.approach)return f.approach;const options=[{x:f.x+f.w/2,y:f.y+f.h+55},{x:f.x+f.w+55,y:f.y+f.h/2},{x:f.x-55,y:f.y+f.h/2},{x:f.x+f.w/2,y:f.y-55}];return options.find(p=>canStand(p.x,p.y))||options[0];}
 export function presentationPoint(zoneId:string) {const f=fixtures.find(f=>f.zoneId===zoneId&&f.type==='screen');return f?interactionPoint(f):zones.find(z=>z.id===zoneId)!.entry;}
 export function nearbyFixture(x:number,y:number) {return fixtures.filter(f=>f.label).map(f=>({f,d:fixtureDistance(f,x,y)})).filter(({f,d})=>d<(f.type==='screen'||f.type==='board'?110:75)).sort((a,b)=>a.d-b.d)[0]?.f;}
-export function audible(a:{x:number;y:number},b:{x:number;y:number},presentationZone?:string) {const za=zoneAt(a.x,a.y),zb=zoneAt(b.x,b.y);return za?.id===zb?.id&&(za?.audio==='room'||za?.id===presentationZone&&!!presentationZone||Math.hypot(a.x-b.x,a.y-b.y)<AUDIO_RADIUS);}
+export function audible(a:{x:number;y:number;availability?:string},b:{x:number;y:number;availability?:string},presentationZone?:string) {if([a.availability,b.availability].some(status=>status==='focus'||status==='away'))return false;const za=zoneAt(a.x,a.y),zb=zoneAt(b.x,b.y);return za?.id===zb?.id&&(za?.audio==='room'||za?.id===presentationZone&&!!presentationZone||Math.hypot(a.x-b.x,a.y-b.y)<AUDIO_RADIUS);}
 
 // Cache the navigation grid once. Its dimensions follow the actual campus bounds.
 const step=25,cols=Math.floor(WORLD.width/step),rows=Math.floor(WORLD.height/step);

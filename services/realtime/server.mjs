@@ -8,7 +8,8 @@ const MAX_FILE = 20 * 1024 * 1024;
 const clean = (value, max = 40) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const color = (value, fallback) => /^#[a-f\d]{6}$/i.test(value) ? value : fallback;
 const profile = value => ({ name: clean(value?.name, 24) || 'Teammate', skin: color(value?.skin, '#d8a17b'), hair: color(value?.hair, '#302332'), shirt: color(value?.shirt, '#8b7cf8'), style: ['short', 'long', 'curly'].includes(value?.style) ? value.style : 'short' });
-const makeRoom = (id, name, password = '') => ({ id, name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], strokes: [], boards: {board:[]}, fixtureStates: {}, presentation: null, assets: new Map() });
+const makeRoom = (id, name, password = '') => ({ id, name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], events: [], notes: [], strokes: [], boards: {board:[]}, fixtureStates: {}, presentation: null, assets: new Map() });
+const visibleMessage = (message, id) => !message.recipientId || message.playerId === id || message.recipientId === id;
 
 export function createOfficeServer() {
   const rooms = new Map();
@@ -75,10 +76,10 @@ export function createOfficeServer() {
             if (!timingSafeEqual(hash, Buffer.from(room.password, 'hex'))) return send(socket, { type: 'error', message: 'That room password is incorrect.' });
           }
           if (room.players.size >= 12) return send(socket, { type: 'error', message: 'This room is full (12 people).' });
-          const id = randomUUID(); const p = { id, ...profile(message.profile), x: SPAWN.x + ((room.players.size % 4)-1.5) * 44, y: SPAWN.y + Math.floor(room.players.size/4)*40, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, seatId: null, reaction: '', reactionAt: 0 };
+          const id = randomUUID(); const p = { id, ...profile(message.profile), x: SPAWN.x + ((room.players.size % 4)-1.5) * 44, y: SPAWN.y + Math.floor(room.players.size/4)*40, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, seatId: null, reaction: '', reactionAt: 0, availability: 'available', statusText: '' };
           client = { id, room, token: randomBytes(24).toString('hex'), socket, lastMessage: 0, windowStart: Date.now(), count: 0 };
           clients.set(socket, client); room.players.set(id, p); clearTimeout(joinTimeout);
-          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private }, players: [...room.players.values()], messages: room.messages, strokes: room.strokes, boards: room.boards, fixtureStates: room.fixtureStates, presentation: room.presentation });
+          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private }, players: [...room.players.values()], messages: room.messages.filter(m=>visibleMessage(m,id)), events: room.events, notes: room.notes, strokes: room.strokes, boards: room.boards, fixtureStates: room.fixtureStates, presentation: room.presentation });
           broadcast(room, { type: 'player', player: p }, socket); return;
         }
         const now = Date.now(); if (now - client.windowStart > 1000) { client.windowStart = now; client.count = 0; }
@@ -111,14 +112,47 @@ export function createOfficeServer() {
           }
           case 'status': {
             for (const key of ['hand', 'mic', 'camera', 'sharing']) if (typeof message[key] === 'boolean') p[key] = message[key];
+            if (['available','focus','away'].includes(message.availability)) p.availability = message.availability;
+            if (typeof message.statusText === 'string') p.statusText = clean(message.statusText,60);
             if (typeof message.reaction === 'string' && ['👋', '👏', '💜', '🎉', '👍', '💡'].includes(message.reaction)) { p.reaction = message.reaction; p.reactionAt = now; }
             broadcast(room, { type: 'player', player: p }); break;
           }
           case 'chat': {
             const text = clean(message.text, 1200); if (!text || now - client.lastMessage < 300) return; client.lastMessage = now;
             const chat = { id: randomUUID(), playerId: id, name: p.name, color: p.shirt, text, time: now, kind: message.kind === 'question' ? 'question' : 'message' };
-            room.messages.push(chat); room.messages = room.messages.slice(-100); broadcast(room, { type: 'chat', message: chat }); break;
+            if (message.recipientId) {
+              if (message.recipientId===id || !room.players.has(message.recipientId)) return send(socket,{type:'error',message:'That teammate is no longer in this workplace.'});
+              chat.recipientId=message.recipientId;
+            } else if (message.zoneId) {
+              if (!zones.some(z=>z.id===message.zoneId)) return;
+              chat.zoneId=message.zoneId;
+            }
+            if (message.replyTo) {
+              const parent=room.messages.find(m=>m.id===message.replyTo);
+              const sameConversation=parent && (chat.recipientId ? parent.recipientId && [parent.playerId,parent.recipientId].every(person=>person===id||person===chat.recipientId) : !parent.recipientId&&parent.zoneId===chat.zoneId);
+              if (!sameConversation) return;
+              chat.replyTo=parent.id;
+            }
+            room.messages.push(chat); room.messages = room.messages.slice(-100);
+            if(chat.recipientId){for(const [target,c] of clients)if(c.room===room&&visibleMessage(chat,c.id))send(target,{type:'chat',message:chat});}
+            else broadcast(room, { type: 'chat', message: chat }); break;
           }
+          case 'profile': { Object.assign(p,profile(message.profile)); broadcast(room,{type:'player',player:p}); break; }
+          case 'event-create': {
+            const title=clean(message.title,80),startAt=message.startAt,duration=message.duration;
+            if(!title||!Number.isFinite(startAt)||startAt<now-60000||startAt>now+90*86400000||!Number.isInteger(duration)||duration<5||duration>240||!zones.some(z=>z.id===message.zoneId))return send(socket,{type:'error',message:'Choose a meeting time within the next 90 days and a duration of 5–240 minutes.'});
+            room.events=room.events.filter(event=>event.startAt+event.duration*60000>now-86400000);
+            if(room.events.length>=80)return send(socket,{type:'error',message:'The agenda is full. Remove an old meeting to add another.'});
+            room.events.push({id:randomUUID(),title,startAt,duration,zoneId:message.zoneId,creatorId:id,creatorName:p.name});
+            room.events.sort((a,b)=>a.startAt-b.startAt);broadcast(room,{type:'events',events:room.events});break;
+          }
+          case 'event-delete': {room.events=room.events.filter(event=>event.id!==message.id||event.creatorId!==id);broadcast(room,{type:'events',events:room.events});break;}
+          case 'note-create': {
+            const text=clean(message.text,2000);if(!text||!zones.some(z=>z.id===message.zoneId))return;
+            if(now-(client.lastNote||0)<500)return;client.lastNote=now;
+            room.notes.push({id:randomUUID(),text,zoneId:message.zoneId,authorId:id,authorName:p.name,time:now});room.notes=room.notes.slice(-100);broadcast(room,{type:'notes',notes:room.notes});break;
+          }
+          case 'note-delete': {room.notes=room.notes.filter(note=>note.id!==message.id||note.authorId!==id);broadcast(room,{type:'notes',notes:room.notes});break;}
           case 'stroke': {
             const boardId=clean(message.boardId)||'board';
             if(!fixtures.some(f=>f.id===boardId&&f.type==='board'))return;

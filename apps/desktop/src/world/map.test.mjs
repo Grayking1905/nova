@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { audible, canStand, findPath, fixtures, zones, SPAWN, WORLD, interactionPoint, fixtureDistance } from './map.ts';
+import { followPoint } from './follow.ts';
+import { zoneAt } from './map.ts';
 
 test('all nine room entrances are reachable through furniture and walls',()=>{
   for(const start of zones)for(const end of zones){
@@ -33,4 +35,10 @@ test('navigation follows expanded bounds and can cross to the south wing',()=>{
   assert.equal(WORLD.width,3600);assert.equal(WORLD.height,2600);
   const route=findPath(SPAWN,zones.at(-1).entry);assert.ok(route.some(p=>p.x>2000));assert.ok(route.some(p=>p.y>2000));
   assert.ok(!canStand(-1,10));assert.ok(!canStand(WORLD.width+1,WORLD.height));
+});
+test('following keeps teammates in the same room at entrances and occupied seats',()=>{
+  for(const z of zones){
+    const positions=[z.entry,...fixtures.filter(f=>f.zoneId===z.id&&f.type==='chair').map(f=>({x:f.x+f.w/2,y:f.y+f.h-8}))];
+    for(const player of positions){const point=followPoint(player);assert.ok(canStand(point.x,point.y));assert.equal(zoneAt(point.x,point.y)?.id,z.id);assert.ok(findPath(SPAWN,point).length);assert.ok(audible(player,point));}
+  }
 });
