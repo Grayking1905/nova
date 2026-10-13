@@ -19,3 +19,33 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}.campus-preview{transform:none}}
 
 .pdf-page{display:block;max-width:100%;max-height:100%;object-fit:contain;width:auto;height:auto;}
+/* The campus HUD uses the same ivory, brass and lavender as its interiors. */
+.campus-map{position:absolute;right:14px;top:14px;width:155px;border:1px solid #65706c99;border-radius:11px;background:#273139ee;box-shadow:0 5px 20px #12212440,0 1px 0 #ffffff12 inset;overflow:hidden;backdrop-filter:blur(10px)}
+.campus-map-heading{display:flex;align-items:center;gap:6px;padding:7px 9px;font-size:7px;font-weight:700;letter-spacing:1.3px;color:#c7d1c6;border-bottom:1px solid #ffffff10}
+.campus-map-heading svg{color:#b5a6d3}.campus-map-heading>span:last-child{margin-left:auto;color:#889892;font-size:7px}
+.campus-map-surface{position:relative;aspect-ratio:2000/1280;margin:4px;border-radius:5px;overflow:hidden;background:#c7d1c7}
+.campus-map-surface>canvas{display:block;width:100%;height:100%}
+.campus-map-surface>button{position:absolute;border:1px solid transparent;border-radius:3px;padding:0;background:transparent;transition:background .18s,border-color .18s}
+.campus-map-surface>button:hover{background:#fff9e63b;border-color:#fff9df}.campus-map-surface>button.current{border-color:#715ca3;background:#a78cc71a}
+.campus-map-surface>button:focus-visible{outline:2px solid #70519c;outline-offset:1px;background:#ffffff30}
+.campus-map-surface>i{position:absolute;width:5px;height:5px;transform:translate(-50%,-50%);background:#527c69;border:1px solid #fff8e5;border-radius:50%;pointer-events:none}
+.campus-map-surface>i.me{background:#8063c2;width:7px;height:7px;box-shadow:0 0 0 2px #ffffff8c,0 0 0 4px #8b70bd55}
+.interaction-prompt{background:linear-gradient(135deg,#f7ecd9f5,#e4d9c4f2);border-color:#fff6e1;color:#675746;border-radius:12px;padding:10px 15px;box-shadow:0 6px 24px #282b4033,0 1px 0 #ffffffb0 inset;gap:12px}
+.interaction-prompt kbd{background:#82705d;color:#fff9ef;border:1px solid #786752;border-radius:6px;box-shadow:0 2px 0 #5e4c3c}.interaction-prompt svg{color:#9b846b}
+.interaction-prompt:hover{background:#fff4df;border-color:#fffdf4;box-shadow:0 7px 26px #282b4055}
+.zoom-controls{background:#273139ee;border-color:#69726c80;backdrop-filter:blur(10px);border-radius:10px;box-shadow:0 5px 16px #17242130}
+@media(max-width:1150px){.campus-map{width:123px;top:11px;right:11px}.campus-map-heading{padding:5px 7px;font-size:6px}}
+/* Expanded-campus activities and navigation */
+.campus-map-surface{aspect-ratio:3600/2600}.campus-map{width:167px}
+.spaces-list{overflow-y:auto;min-height:0;scrollbar-width:thin}.spaces-list>button{flex:none}.spaces-list{padding-bottom:12px}
+.break-score{display:flex;justify-content:space-between;margin:20px 0;color:#bda9d6;font-size:13px}.break-score strong{color:#ecdac1}
+.break-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0 22px}
+.break-grid>button{height:68px;border-radius:13px;border:1px solid #625071;background:#33263f;color:#806d8d;font-size:30px;transition:transform .16s,background .16s}
+.break-grid>button.lit{background:#d2b4ed;border-color:#ecdef8;color:#795296;box-shadow:0 0 28px #ba8cdd30;transform:translateY(-2px)}.break-grid>button:disabled{cursor:default}
+.reading-cards{display:flex;flex-direction:column;gap:13px;max-height:420px;overflow:auto}
+.reading-cards article{padding:17px 20px;border:1px solid #69517455;border-radius:12px;background:#382b4545}
+.reading-cards article>span{color:#b89fcb;letter-spacing:1.3px;font-size:9px}.reading-cards h3{font-size:17px;letter-spacing:-.4px;color:#e9dbe8;margin:9px 0}.reading-cards p{font-size:12px;line-height:1.8;color:#bcaec7;margin:6px 0}
+@media(max-width:1150px){.campus-map{width:130px}}
+.room-activities{position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:3px;padding:5px 7px;border:1px solid #6e796777;border-radius:10px;background:#273139ee;backdrop-filter:blur(10px);box-shadow:0 5px 16px #17242130;z-index:3}
+.room-activities>span{font-size:6px;letter-spacing:1px;color:#aebba5;font-weight:700;margin-right:5px}.room-activities>button{display:grid;place-items:center;width:27px;height:27px;background:transparent;border:1px solid transparent;border-radius:7px;color:#c9d1bd}.room-activities>button:hover{background:#78826a44;border-color:#89997560;color:#f3edcf}.room-activities>button:focus-visible{outline:2px solid #c3a9e8;outline-offset:2px}
+@media(max-width:1150px){.room-activities{bottom:61px}}

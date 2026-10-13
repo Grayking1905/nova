@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { audible, canStand, findPath, fixtures, zones } from './map.ts';
+import { audible, canStand, findPath, fixtures, zones, SPAWN, WORLD, interactionPoint, fixtureDistance } from './map.ts';
 
-test('all six room entrances are reachable through furniture and walls',()=>{
+test('all nine room entrances are reachable through furniture and walls',()=>{
   for(const start of zones)for(const end of zones){
     assert.ok(canStand(start.entry.x,start.entry.y),`${start.name} entry is walkable`);
     if(start.id===end.id)continue;
@@ -12,12 +12,25 @@ test('all six room entrances are reachable through furniture and walls',()=>{
     for(const point of path){for(let step=1;step<=10;step++){const t=step/10;assert.ok(canStand(previous.x+(point.x-previous.x)*t,previous.y+(point.y-previous.y)*t),`${start.name} → ${end.name} crosses a wall`);}previous=point;}
   }
 });
-test('screen and whiteboard interaction points are reachable',()=>{
-  for(const id of ['board','stage-screen']){const fixture=fixtures.find(f=>f.id===id);const end={x:fixture.x+fixture.w/2,y:fixture.y+fixture.h+70};const path=findPath({x:1040,y:940},end);assert.ok(path.length);assert.ok(Math.hypot(path.at(-1).x-end.x,path.at(-1).y-end.y)<30);}
+test('every interactive component and all 72 seats are reachable',()=>{
+  assert.equal(zones.length,9);
+  assert.ok(canStand(SPAWN.x,SPAWN.y));
+  for(const z of zones){const seats=fixtures.filter(f=>f.zoneId===z.id&&f.type==='chair');assert.equal(seats.length,8,`${z.name} has eight seats`);for(const seat of seats)assert.ok(canStand(seat.x+seat.w/2,seat.y+seat.h-8),`${seat.id} has clear sitting space`);}
+  for(const f of fixtures.filter(f=>f.label)){
+    const route=findPath(SPAWN,interactionPoint(f));assert.ok(route.length,`${f.id} is reachable`);
+    assert.ok(fixtureDistance(f,route.at(-1).x,route.at(-1).y)<100,`${f.id} can be interacted with`);
+    for(const p of route)assert.ok(canStand(p.x,p.y),`${f.id} route is walkable`);
+  }
 });
-test('proximity respects room boundaries and the Forum has room-wide audio',()=>{
-  assert.ok(audible({x:300,y:450},{x:600,y:450}));
-  assert.ok(!audible({x:700,y:450},{x:800,y:450}));
-  assert.ok(!audible({x:150,y:1100},{x:750,y:1100}));
-  assert.ok(audible({x:1050,y:950},{x:1100,y:950}));
+test('large room audio reaches all seats while proximity respects room boundaries',()=>{
+  for(const z of zones.filter(z=>z.audio==='room')){const seats=fixtures.filter(f=>f.zoneId===z.id&&f.type==='chair');assert.ok(audible({x:seats[0].x,y:seats[0].y},{x:seats.at(-1).x,y:seats.at(-1).y}));}
+  assert.ok(!audible(zones[0].entry,zones[1].entry));
+  assert.ok(!audible({x:200,y:1200},{x:1000,y:1200}));
+  assert.ok(audible({x:200,y:1200},{x:1000,y:1200},'work'));
+  assert.ok(audible(SPAWN,{x:SPAWN.x+50,y:SPAWN.y}));
+});
+test('navigation follows expanded bounds and can cross to the south wing',()=>{
+  assert.equal(WORLD.width,3600);assert.equal(WORLD.height,2600);
+  const route=findPath(SPAWN,zones.at(-1).entry);assert.ok(route.some(p=>p.x>2000));assert.ok(route.some(p=>p.y>2000));
+  assert.ok(!canStand(-1,10));assert.ok(!canStand(WORLD.width+1,WORLD.height));
 });

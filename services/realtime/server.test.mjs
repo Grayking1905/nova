@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { createOfficeServer } from './server.mjs';
+import { SPAWN, fixtures, WORLD, interactionPoint } from '../../apps/desktop/src/world/map.ts';
 
 async function setup(t) { const service=createOfficeServer();await new Promise(resolve=>service.server.listen(0,'127.0.0.1',resolve));t.after(()=>service.close());const address=`127.0.0.1:${service.server.address().port}`;return {service,address,base:`http://${address}`}; }
 async function client(address,options={}) {
@@ -47,5 +48,33 @@ test('authorized uploads, presentation ownership, page changes, late join, and p
 test('invalid movement and malformed strokes do not corrupt room state',async t=>{
   const {address,service}=await setup(t);const a=await client(address);const welcome=await a.wait('welcome');
   a.send({type:'move',x:'bad',y:-99999});a.send({type:'stroke',stroke:{points:[[-1,3],[Infinity,2]],color:'#fff',width:100}});a.send({type:'chat',text:'barrier'});await a.wait('chat');
-  const room=service.rooms.get('nova-campus');assert.equal(room.players.get(welcome.id).x,1040);assert.equal(room.strokes.length,0);
+  const room=service.rooms.get('nova-campus');assert.equal(room.players.get(welcome.id).x,SPAWN.x-66);assert.equal(room.strokes.length,0);
+});
+
+test('expanded bounds, shared component effects, lamp state, and occupied seats',async t=>{
+  const {address}=await setup(t);const a=await client(address);const aw=await a.wait('welcome');
+  const b=await client(address);await b.wait('welcome');await a.wait('player');
+  a.send({type:'move',x:3200,y:2300,moving:true});assert.equal((await b.wait('player')).player.x,3200);
+  const coffee=fixtures.find(f=>f.id==='cafe'),point=interactionPoint(coffee);
+  a.send({type:'move',...point,moving:false});await b.wait('player');
+  a.send({type:'interact',fixtureId:coffee.id});const brewed=await b.wait('interaction');assert.equal(brewed.interaction.fixtureId,'cafe');assert.equal(brewed.interaction.playerId,aw.id);await a.wait('interaction');
+  const lamp=fixtures.find(f=>f.id==='lounge-lamp');b.send({type:'move',...interactionPoint(lamp)});await a.wait('player');
+  b.send({type:'interact',fixtureId:lamp.id});assert.equal((await a.wait('fixture-state')).on,false);await a.wait('interaction');
+  const late=await client(address);const welcome=await late.wait('welcome');assert.equal(welcome.fixtureStates[lamp.id],false);await a.wait('player');await b.wait('player');
+  await new Promise(resolve=>setTimeout(resolve,300));
+  const seat=fixtures.find(f=>f.id==='lounge-seat-a-0'),near=interactionPoint(seat);
+  a.send({type:'move',...near});await b.wait('player');a.send({type:'interact',fixtureId:seat.id});
+  const seated=await b.wait('player');assert.equal(seated.player.seatId,seat.id);assert.equal(seated.player.seated,true);await a.wait('player');
+  b.send({type:'move',...near});await a.wait('player');b.send({type:'interact',fixtureId:seat.id});assert.match((await b.wait('error')).message,/occupied/);
+  a.send({type:'move',x:near.x,y:near.y,moving:true});assert.equal((await b.wait('player')).player.seatId,null);
+  a.send({type:'move',x:WORLD.width+999,y:WORLD.height+999,moving:true});const bounded=await b.wait('player');assert.equal(bounded.player.x,WORLD.width-40);assert.equal(bounded.player.y,WORLD.height-40);
+});
+
+test('boards keep separate drawings and presentations remember their spatial room',async t=>{
+  const {address}=await setup(t);const a=await client(address);await a.wait('welcome');const b=await client(address);await b.wait('welcome');
+  a.send({type:'stroke',boardId:'meeting-board',stroke:{points:[[.1,.2],[.3,.4]],color:'#123456',width:4}});assert.equal((await b.wait('stroke')).boardId,'meeting-board');
+  const c=await client(address);const cw=await c.wait('welcome');assert.equal(cw.boards['meeting-board'].length,1);assert.equal(cw.boards.board.length,0);
+  b.send({type:'clear-board',boardId:'board'});await a.wait('clear-board');
+  a.send({type:'presentation',source:{kind:'screen',url:'',name:'Orbit screen',page:1,zoneId:'meeting'}});assert.equal((await b.wait('presentation')).source.zoneId,'meeting');
+  const d=await client(address);const dw=await d.wait('welcome');assert.equal(dw.boards['meeting-board'].length,1);assert.equal(dw.presentation.zoneId,'meeting');
 });

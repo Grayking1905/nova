@@ -5,7 +5,7 @@ import { audible, zoneAt } from '../world/map';
 type Signal={description?:RTCSessionDescriptionInit;candidate?:RTCIceCandidateInit};
 type Peer={pc:RTCPeerConnection;makingOffer:boolean;ignoreOffer:boolean;polite:boolean;settingAnswer:boolean;pending:RTCIceCandidateInit[];audio:MediaStream;camera:MediaStream;screen:MediaStream};
 export type RemoteMedia={id:string;audio:MediaStream;camera:MediaStream;screen:MediaStream};
-type Props={id:string;players:Player[];connected:boolean;send:(data:Record<string,unknown>)=>void;onError:(message:string)=>void};
+type Props={id:string;players:Player[];connected:boolean;presentationZone?:string;send:(data:Record<string,unknown>)=>void;onError:(message:string)=>void};
 export function useMedia(props:Props){
   const [mic,setMic]=useState(false),[camera,setCamera]=useState(false),[sharing,setSharing]=useState(false);
   const [localCamera,setLocalCamera]=useState<MediaStream|null>(null),[localScreen,setLocalScreen]=useState<MediaStream|null>(null);
@@ -16,7 +16,7 @@ export function useMedia(props:Props){
   const refresh=useCallback(()=>setRemotes([...peers.current].map(([id,p])=>({id,audio:p.audio,camera:p.camera,screen:p.screen}))),[]);
   const updateTracks=useCallback(()=>{
     const me=current.current.players.find(p=>p.id===current.current.id);if(!me)return;
-    for(const [id,peer] of peers.current){const player=current.current.players.find(p=>p.id===id);if(!player||peer.pc.signalingState==='closed')continue;const near=audible(me,player);const stage=zoneAt(player.x,player.y)?.id==='stage';const tracks=[near?audioStream.current?.getAudioTracks()[0]:null,near?videoStream.current?.getVideoTracks()[0]:null,stage?shareStream.current?.getVideoTracks()[0]:null];
+    for(const [id,peer] of peers.current){const player=current.current.players.find(p=>p.id===id);if(!player||peer.pc.signalingState==='closed')continue;const near=audible(me,player,current.current.presentationZone);const stage=zoneAt(player.x,player.y)?.id===(current.current.presentationZone||'stage');const tracks=[near?audioStream.current?.getAudioTracks()[0]:null,near?videoStream.current?.getVideoTracks()[0]:null,stage?shareStream.current?.getVideoTracks()[0]:null];
       peer.pc.getTransceivers().slice(0,3).forEach((t,i)=>{t.direction='sendrecv';const track=tracks[i]||null;if(t.sender.track!==track)t.sender.replaceTrack(track).catch(()=>{});});
     }
   },[]);
@@ -48,7 +48,7 @@ export function useMedia(props:Props){
     for(const player of props.players)if(player.id!==props.id)createPeer(player.id);
     for(const [id,p] of peers.current)if(!props.players.some(player=>player.id===id)){p.pc.close();peers.current.delete(id);}
     updateTracks();
-  },[props.players,props.connected,props.id,createPeer,updateTracks]);
+  },[props.players,props.connected,props.id,props.presentationZone,createPeer,updateTracks]);
   const stopAll=useCallback(()=>{generation.current++;[audioStream,videoStream,shareStream].forEach(ref=>{ref.current?.getTracks().forEach(t=>t.stop());ref.current=null;});for(const p of peers.current.values())p.pc.close();peers.current.clear();setMic(false);setCamera(false);setSharing(false);setLocalCamera(null);setLocalScreen(null);setRemotes([]);},[]);
   useEffect(()=>()=>{generation.current++;[audioStream,videoStream,shareStream].forEach(ref=>ref.current?.getTracks().forEach(t=>t.stop()));for(const p of peers.current.values())p.pc.close();},[]);
   const toggleMic=async()=>{if(busy.current.has('mic'))return;busy.current.add('mic');const request=generation.current;try{if(audioStream.current){audioStream.current.getTracks().forEach(t=>t.stop());audioStream.current=null;setMic(false);current.current.send({type:'status',mic:false});}else{const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});if(request!==generation.current||!current.current.connected){stream.getTracks().forEach(t=>t.stop());return;}audioStream.current=stream;setMic(true);current.current.send({type:'status',mic:true});}updateTracks();}catch{current.current.onError('Microphone access is unavailable. Check your device permissions.');}finally{busy.current.delete('mic');}};

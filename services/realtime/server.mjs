@@ -2,12 +2,13 @@ import http from 'node:http';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { WORLD, SPAWN, fixtures, fixtureDistance, canStand, zones } from '../../apps/desktop/src/world/map.ts';
 
 const MAX_FILE = 20 * 1024 * 1024;
 const clean = (value, max = 40) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const color = (value, fallback) => /^#[a-f\d]{6}$/i.test(value) ? value : fallback;
 const profile = value => ({ name: clean(value?.name, 24) || 'Teammate', skin: color(value?.skin, '#d8a17b'), hair: color(value?.hair, '#302332'), shirt: color(value?.shirt, '#8b7cf8'), style: ['short', 'long', 'curly'].includes(value?.style) ? value.style : 'short' });
-const makeRoom = (id, name, password = '') => ({ id, name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], strokes: [], presentation: null, assets: new Map() });
+const makeRoom = (id, name, password = '') => ({ id, name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], strokes: [], boards: {board:[]}, fixtureStates: {}, presentation: null, assets: new Map() });
 
 export function createOfficeServer() {
   const rooms = new Map();
@@ -74,10 +75,10 @@ export function createOfficeServer() {
             if (!timingSafeEqual(hash, Buffer.from(room.password, 'hex'))) return send(socket, { type: 'error', message: 'That room password is incorrect.' });
           }
           if (room.players.size >= 12) return send(socket, { type: 'error', message: 'This room is full (12 people).' });
-          const id = randomUUID(); const p = { id, ...profile(message.profile), x: 1040 + (room.players.size % 4) * 44, y: 940, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, reaction: '', reactionAt: 0 };
+          const id = randomUUID(); const p = { id, ...profile(message.profile), x: SPAWN.x + ((room.players.size % 4)-1.5) * 44, y: SPAWN.y + Math.floor(room.players.size/4)*40, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, seatId: null, reaction: '', reactionAt: 0 };
           client = { id, room, token: randomBytes(24).toString('hex'), socket, lastMessage: 0, windowStart: Date.now(), count: 0 };
           clients.set(socket, client); room.players.set(id, p); clearTimeout(joinTimeout);
-          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private }, players: [...room.players.values()], messages: room.messages, strokes: room.strokes, presentation: room.presentation });
+          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private }, players: [...room.players.values()], messages: room.messages, strokes: room.strokes, boards: room.boards, fixtureStates: room.fixtureStates, presentation: room.presentation });
           broadcast(room, { type: 'player', player: p }, socket); return;
         }
         const now = Date.now(); if (now - client.windowStart > 1000) { client.windowStart = now; client.count = 0; }
@@ -86,10 +87,27 @@ export function createOfficeServer() {
         switch (message.type) {
           case 'move': {
             if (!Number.isFinite(message.x) || !Number.isFinite(message.y)) return;
-            p.x = Math.max(40, Math.min(1960, message.x)); p.y = Math.max(40, Math.min(1240, message.y));
+            p.x = Math.max(40, Math.min(WORLD.width-40, message.x)); p.y = Math.max(40, Math.min(WORLD.height-40, message.y));
             p.direction = ['up', 'down', 'left', 'right'].includes(message.direction) ? message.direction : p.direction;
-            p.moving = !!message.moving; p.seated = !!message.seated;
+            p.moving = !!message.moving;if(p.moving)p.seatId=null;p.seated=!!p.seatId;
             broadcast(room, { type: 'player', player: p }, socket); break;
+          }
+          case 'interact': {
+            const fixture=fixtures.find(f=>f.id===message.fixtureId);
+            if(!fixture?.label||fixtureDistance(fixture,p.x,p.y)>150)return send(socket,{type:'error',message:'Walk closer to interact with that component.'});
+            if(now-(client.lastInteraction||0)<250)return;
+            if(fixture.type==='chair') {
+              if([...room.players.values()].some(other=>other.id!==id&&other.seatId===fixture.id))return send(socket,{type:'error',message:'That seat is occupied. Choose another chair.'});
+              const x=fixture.x+fixture.w/2,y=fixture.y+fixture.h-8;
+              if(!canStand(x,y))return;
+              p.seated=p.seatId!==fixture.id;p.seatId=p.seated?fixture.id:null;p.moving=false;
+              if(p.seated){p.x=x;p.y=y;p.direction='down';}
+              broadcast(room,{type:'player',player:p});
+            }
+            if(fixture.type==='lamp'){room.fixtureStates[fixture.id]=room.fixtureStates[fixture.id]===false;broadcast(room,{type:'fixture-state',fixtureId:fixture.id,on:room.fixtureStates[fixture.id]});}
+            client.lastInteraction=now;
+            broadcast(room,{type:'interaction',interaction:{id:randomUUID(),fixtureId:fixture.id,playerId:id,startedAt:now}});
+            break;
           }
           case 'status': {
             for (const key of ['hand', 'mic', 'camera', 'sharing']) if (typeof message[key] === 'boolean') p[key] = message[key];
@@ -102,20 +120,23 @@ export function createOfficeServer() {
             room.messages.push(chat); room.messages = room.messages.slice(-100); broadcast(room, { type: 'chat', message: chat }); break;
           }
           case 'stroke': {
+            const boardId=clean(message.boardId)||'board';
+            if(!fixtures.some(f=>f.id===boardId&&f.type==='board'))return;
+            const board=room.boards[boardId]||=[];
             const stroke = message.stroke;
             if (!Array.isArray(stroke?.points) || stroke.points.length < 2 || stroke.points.length > 600 || !stroke.points.every(pt => Array.isArray(pt) && pt.length === 2 && pt.every(n => Number.isFinite(n) && n >= 0 && n <= 1))) return;
-            if (room.strokes.length >= 1500) return send(socket, { type: 'error', message: 'Whiteboard is full. Clear it to keep drawing.' });
+            if (Object.values(room.boards).reduce((sum,strokes)=>sum+strokes.length,0) >= 1500) return send(socket, { type: 'error', message: 'Whiteboard is full. Clear it to keep drawing.' });
             const valid = { id: randomUUID(), color: color(stroke.color, '#8b7cf8'), width: [2, 4, 8].includes(stroke.width) ? stroke.width : 4, points: stroke.points };
-            room.strokes.push(valid); broadcast(room, { type: 'stroke', stroke: valid }); break;
+            board.push(valid);if(boardId==='board')room.strokes=board;broadcast(room,{type:'stroke',boardId,stroke:valid}); break;
           }
-          case 'clear-board': room.strokes = []; broadcast(room, { type: 'clear-board' }); break;
+          case 'clear-board': {const boardId=clean(message.boardId)||'board';if(!fixtures.some(f=>f.id===boardId&&f.type==='board'))return;room.boards[boardId]=[];if(boardId==='board')room.strokes=[];broadcast(room,{type:'clear-board',boardId});break;}
           case 'presentation': {
             if (room.presentation && room.presentation.ownerId !== id) return send(socket, { type: 'error', message: 'Someone is already presenting.' });
             if (!message.source) { room.presentation = null; broadcast(room, { type: 'presentation', source: null }); break; }
             const source = message.source;
             if (!['pdf', 'image', 'slides', 'screen'].includes(source.kind)) return;
             if (source.kind !== 'screen' && !room.assets.has(clean(source.url, 100).split('/').pop())) return;
-            room.presentation = { kind: source.kind, name: clean(source.name, 120), url: clean(source.url, 100), page: Math.max(1, Math.min(200, Math.floor(source.page) || 1)), ownerId: id, ownerName: p.name };
+            room.presentation = { kind: source.kind, name: clean(source.name, 120), url: clean(source.url, 100), page: Math.max(1, Math.min(200, Math.floor(source.page) || 1)), ownerId: id, ownerName: p.name, zoneId: zones.some(z=>z.id===source.zoneId)?source.zoneId:'stage' };
             broadcast(room, { type: 'presentation', source: room.presentation }); break;
           }
           case 'slide': if (room.presentation?.ownerId === id && Number.isInteger(message.page)) { room.presentation.page = Math.max(1, Math.min(200, message.page)); broadcast(room, { type: 'presentation', source: room.presentation }); } break;
