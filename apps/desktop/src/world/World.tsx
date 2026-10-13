@@ -13,7 +13,7 @@ export default function World(props:Props){
   const canvasRef=useRef<HTMLCanvasElement>(null);const state=useRef(props);useEffect(()=>{state.current=props;},[props]);
   useEffect(()=>{
     const canvas=canvasRef.current!;const context=canvas.getContext('2d')!;const backdrop=document.createElement('canvas');backdrop.width=WORLD.width;backdrop.height=WORLD.height;drawMap(backdrop.getContext('2d')!,false);const scene=createScene();
-    const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motionPreference=window.matchMedia('(prefers-reduced-motion: reduce)');let reducedMotion=motionPreference.matches;const onMotionPreference=()=>{reducedMotion=motionPreference.matches;};motionPreference.addEventListener('change',onMotionPreference);
     const local={...state.current.me,id:props.me.id};const keys=new Set<string>();let path:{x:number;y:number}[]=[];let animation=0;let last=performance.now(),lastSend=0,lastNear='';let w=0,h=0,scale=1,camX=SPAWN.x,camY=SPAWN.y;let targetNonce=-1;let previousMoving=false;let lastSeat=local.seatId;const remote=new Map<string,{x:number;y:number}>();
     const resize=()=>{const b=canvas.getBoundingClientRect();w=b.width;h=b.height;const dpr=Math.min(window.devicePixelRatio,2);canvas.width=w*dpr;canvas.height=h*dpr;};
     const observer=new ResizeObserver(resize);observer.observe(canvas);resize();
@@ -50,7 +50,7 @@ export default function World(props:Props){
       if(near)drawInteraction(context,near,now,reducedMotion);
       animation=requestAnimationFrame(frame);
     };animation=requestAnimationFrame(frame);
-    return()=>{cancelAnimationFrame(animation);observer.disconnect();scene.dispose();backdrop.width=0;backdrop.height=0;window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('blur',blur);canvas.removeEventListener('click',click);};
+    return()=>{cancelAnimationFrame(animation);observer.disconnect();scene.dispose();motionPreference.removeEventListener('change',onMotionPreference);backdrop.width=0;backdrop.height=0;window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('blur',blur);canvas.removeEventListener('click',click);};
   },[props.me.id]);
   return <canvas ref={canvasRef} className="world-canvas" tabIndex={0} aria-label="Interactive 2D workplace. Move with arrow keys or WASD. E interacts. Enter opens chat."/>;
 }

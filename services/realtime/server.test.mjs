@@ -18,6 +18,7 @@ test('two participants synchronize movement, chat, reactions, whiteboard, and si
   a.send({type:'move',x:123,y:234,direction:'left',moving:true});const moved=await b.wait('player');assert.equal(moved.player.x,123);assert.equal(moved.player.id,aw.id);
   a.send({type:'chat',text:'A shared idea',kind:'question'});assert.equal((await b.wait('chat')).message.text,'A shared idea');assert.equal((await a.wait('chat')).message.kind,'question');
   a.send({type:'status',hand:true,reaction:'👏'});assert.equal((await b.wait('player')).player.hand,true);
+  a.send({type:'status',reaction:'👋'});assert.equal((await b.wait('player')).player.reaction,'👋');
   a.send({type:'stroke',stroke:{points:[[.1,.2],[.5,.6]],width:4,color:'#123456'}});assert.equal((await b.wait('stroke')).stroke.color,'#123456');
   b.send({type:'clear-board'});await a.wait('clear-board');
   a.send({type:'signal',target:bw.id,data:{description:{type:'offer',sdp:'test'}}});assert.equal((await b.wait('signal')).from,aw.id);
