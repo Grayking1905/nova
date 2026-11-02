@@ -7,8 +7,24 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "node scripts/dev.mjs --web",
     "server": "node services/realtime/server.mjs",
-    "test": "node --test services/realtime/server.test.mjs apps/desktop/src/world/map.test.mjs apps/desktop/src/world/components/AvatarMotion.test.mjs",
+    "test": "node --test services/realtime/server.test.mjs apps/desktop/src/world/map.test.mjs apps/desktop/src/world/components/AvatarMotion.test.mjs services/realtime/database.test.mjs",
     "build": "pnpm --filter @spatialmeet/desktop build",
-    "lint": "pnpm --recursive lint"
+    "lint": "pnpm --recursive lint",
+    "db:generate": "node scripts/database.mjs generate",
+    "db:validate": "node scripts/database.mjs validate",
+    "db:migrate": "node scripts/database.mjs migrate deploy",
+    "db:status": "node scripts/database.mjs migrate status",
+    "postinstall": "node scripts/database.mjs generate",
+    "db:check": "node scripts/check-database.mjs",
+    "test:database": "node scripts/test-database.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "dotenv": "^18.0.9",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "prisma": "^7.10.1"
   }
 }

@@ -8,6 +8,7 @@ Requires Node.js 22.18+ (24 recommended) and pnpm 10.
 
 ```sh
 pnpm install
+pnpm db:migrate
 pnpm dev
 ```
 
@@ -27,7 +28,7 @@ Open `http://localhost:5173` in two browser windows, enter different names, and 
 - Continuous WASD/arrow movement, click-to-walk pathfinding, collision with walls and furniture, camera following, zoom, minimap, and room navigation.
 - Shared participant presence, campus and per-room chat channels, direct messages, contextual replies, recent activity notifications, temporary speech bubbles, raised hands, and reactions. DMs are delivered only to their two participants and excluded from other participants’ join history. Conversation history is limited to the latest 100 messages per campus and identities last for the current connection.
 - Availability (available, focus, away), a custom status message, teammate search, walk-to-person and follow controls. Focus/away pauses proximity audio and camera transmission without turning off your local devices. Move manually to stop following.
-- A shared campus agenda with named meetings, start times, room selection, 15–120 minute durations, and calendar-file downloads. Shared room notes can be added, removed by their author, and exported as Markdown. These are manually written notes.
+- A shared campus agenda with named meetings, start times, room selection, 15–120 minute durations, and calendar-file downloads. Shared room notes can be added, removed by their author, and exported as Markdown. These are manually written notes, saved with the workplace.
 - Native WebRTC microphone/camera connections within proximity and the same room. Participants in the Forum, Idea Studio, Orbit Room, and Project Lab have room-wide audio. Tracks are removed from distant peer connections. Incoming audio can be muted independently.
 - Shared whiteboard with pen colors, thickness, clear confirmation, and PNG export.
 - Shared PDF, image, and PPTX presentations with presenter-owned page controls. PPTX previews support text, raster images, and basic solid shapes; themes, masters, charts, transitions, animations, and exact PowerPoint typography are not reproduced. Share the PowerPoint window for exact playback or legacy `.ppt` files.
@@ -77,7 +78,7 @@ The interface uses the campus’s ivory, sage, lavender, clay, and powder blue c
 
 UI components are separated into `WelcomeScreen`, `AvatarEditor`, `AvatarEditorDialog`, `RoomIllustration`, `WorkspacePanel`, and `CampusAgenda`. Styles are in `apps/desktop/src/ui.css`; spatial objects and animations remain individually implemented in `apps/desktop/src/world/components`.
 
-[Gather’s current feature list](https://www.gather.town/features) informed the collaboration direction. Nova now includes spatial presence, proximity calls, room audio, screen and file presentations, reactions, direct messages, room channels, replies, availability, follow controls, manual shared notes, meeting planning, and theme selection. It does **not** yet have full Gather feature parity. AI transcription/notes, meeting recording, simultaneous screen presenters, custom public/private channels and group messages, a live office editor, desk ownership, desktop Mini Mode, Google Calendar/Spotify/GitHub integrations, durable message history, accounts, and production administration still need implementation. The current focus view is an in-app panel toggle, and calendar export creates an `.ics` file; neither is an external integration.
+[Gather’s current feature list](https://www.gather.town/features) informed the collaboration direction. Nova now includes spatial presence, proximity calls, room audio, screen and file presentations, reactions, direct messages, room channels, replies, availability, follow controls, manual shared notes, meeting planning, and theme selection. It does **not** yet have full Gather feature parity. AI transcription/notes, meeting recording, simultaneous screen presenters, custom public/private channels and group messages, a live office editor, desk ownership, desktop Mini Mode, Google Calendar/Spotify/GitHub integrations, persistent account identities and production administration still need implementation. Public and room-channel histories are now durable; direct messages remain session-only. The current focus view is an in-app panel toggle, and calendar export creates an `.ics` file; neither is an external integration.
 
 ## Architecture
 
@@ -91,10 +92,33 @@ UI components are separated into `WelcomeScreen`, `AvatarEditor`, `AvatarEditorD
 
 ## Hosting and current limits
 
-This is a working local development application, not a deployed service. Rooms, chat, agendas, shared notes, boards, and uploaded files live in server memory. Restarting the server clears them; custom rooms expire after the last participant leaves. Rooms are capped at 12 participants and uploads at 20 MB each / 8 files per room. Agendas hold up to 80 meetings (past entries are pruned when a meeting is added); note history holds the latest 100 notes. Author permissions use connection identities rather than persistent accounts.
+This is a working local development application, not a deployed service. Workplace metadata, nine spatial-room records per workplace, public chat, agendas, notes, boards, lamp settings, and uploaded files are stored in PostgreSQL through Prisma. Empty workplaces are evicted from the live cache and restored from PostgreSQL on the next join. Positions, direct messages, live media, connection identities, and active presentations are session-only. Rooms are capped at 12 participants and uploads at 20 MB each / 8 files per room. Agendas hold up to 80 meetings (past entries are pruned when a meeting is added); note history holds the latest 100 notes. Author permissions use connection identities rather than persistent accounts.
 
 For a shared network deployment, set `HOST=0.0.0.0` on the room server, expose it behind HTTPS/WSS, and set `VITE_ROOM_SERVER` in `apps/desktop/.env.local` before building. Use a reachable HTTPS frontend URL for invitations; localhost invites only work on the same computer. Browser mic/camera require a secure context (HTTPS or localhost).
 
 Configure `VITE_ICE_SERVERS` with a TURN service for reliable calls across NATs and restrictive networks. The default public STUN server alone cannot cover every network. The current small-room peer mesh should be replaced with an SFU for larger groups. Persistent storage, account authentication, room moderation, and a deployed TURN service are follow-on production work.
 
 Reference: [SkyOffice](https://github.com/kevinshen56714/SkyOffice) feature set. No reference repository code or design assets were copied.
+
+
+## PostgreSQL and Prisma
+
+The realtime service reads `DATABASE_URL` from the ignored root `.env` file. Keep real credentials only there; never use `VITE_DATABASE_URL`. The desktop renderer receives no database credentials. `.env.example` has an empty placeholder. Project rules in `AGENTS.md` and `.cursor/rules/secrets.mdc` preserve this requirement.
+
+On a fresh checkout, create `.env` with your PostgreSQL URL, then run:
+
+```sh
+pnpm install
+pnpm db:validate
+pnpm db:migrate
+pnpm db:check
+pnpm dev
+```
+
+`pnpm db:generate` regenerates the client (also runs after install). `pnpm db:status` checks migrations. Migration deployment does not reset the database. CLI output and startup errors redact connection credentials. Production startup fails if PostgreSQL is unavailable; it does not silently use temporary storage.
+
+The Prisma schema contains `Workspace`, `Space`, `WorkspaceState`, and `Asset`. Each workplace has an immutable random join code and unique world seed; both resolve to the same persisted workplace. Each has nine separate room records. Create a workplace in the join dialog, then share its invitation or copy its world seed from Settings. Private workplaces still require the password. Up to 12 participants can join a workplace simultaneously; each spatial room contains eight usable seats. Code/seed matching is case insensitive. A seed identifies a workplace; it does not change the campus geometry.
+
+Durable changes are saved before success is broadcast. Failed saves roll back the changed durable fields. WebSocket traffic, signaling, histories, boards, notes, and authenticated asset downloads are scoped to the joined workplace. The current server coordinates live presence in one Node process. Multiple server replicas need a shared pub/sub layer and presence coordination; PostgreSQL persistence alone does not synchronize live sockets between processes.
+
+Run `pnpm test` for local regression tests, and `pnpm test:database` for the opt-in real PostgreSQL restart/isolation test. The latter creates a test workplace and removes only that test's records afterward. The normal tests inject memory-only stores and never reset the configured database.

@@ -42,7 +42,7 @@ test('authorized uploads, presentation ownership, page changes, late join, and p
   b.send({type:'presentation',source:null});assert.match((await b.wait('error')).message,/already presenting/);
   a.send({type:'slide',page:3});assert.equal((await b.wait('presentation')).source.page,3);
   const c=await client(address);assert.equal((await c.wait('welcome')).presentation.page,3);
-  const served=await fetch(`${base}${asset.url}`);assert.equal(served.headers.get('content-type'),'application/pdf');assert.match(await served.text(),/%PDF/);
+  const served=await fetch(`${base}${asset.url}`,{headers:{Authorization:`Bearer ${aw.token}`}});assert.equal(served.headers.get('content-type'),'application/pdf');assert.match(await served.text(),/%PDF/);
   a.socket.close();assert.equal((await b.wait('presentation')).source,null);
 });
 

@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Workspace {
+  // The immutable, shareable join code is the workplace identifier.
+  id           String   @id
+  worldSeed    String   @unique
+  name         String
+  private      Boolean  @default(false)
+  passwordHash String   @default("")
+  passwordSalt String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  spaces       Space[]
+  state        WorkspaceState?
+  assets       Asset[]
+}
+
+model Space {
+  workspaceId String
+  zoneId      String
+  name        String
+  capacity    Int      @default(8)
+  audioMode   String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, zoneId])
+}
+
+// Bounded application histories; only changed fields are written per event.
+// Live positions, device tracks, session tokens and active presentations are ephemeral.
+model WorkspaceState {
+  workspaceId   String    @id
+  messages      Json      @default("[]")
+  events        Json      @default("[]")
+  notes         Json      @default("[]")
+  boards        Json      @default("{}")
+  fixtureStates Json      @default("{}")
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id          String    @id
+  workspaceId String
+  type        String
+  data        Bytes
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
