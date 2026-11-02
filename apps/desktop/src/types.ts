@@ -1,6 +1,12 @@
-export type Avatar = { name: string; skin: string; hair: string; shirt: string; style: 'short' | 'long' | 'curly' };
+import type { hairstyles, outfits, accessories } from './world/avatarOptions';
+export type Avatar = { name: string; skin: string; hair: string; shirt: string; style: typeof hairstyles[number]; outfit?: typeof outfits[number]; accessory?: typeof accessories[number]; pants?: string; shoes?: string };
+export type LibraryFolder = { id:string; name:string; parentId:string|null; shelfId:string; createdBy:string };
+export type LibraryFile = { id:string; name:string; folderId:string|null; shelfId:string; kind:'file'|'link'; type:string; size:number; url?:string; createdBy:string; createdAt:number };
+export type ResourceLibrary = { folders:LibraryFolder[]; files:LibraryFile[] };
 export type Availability = 'available' | 'focus' | 'away';
-export type Player = Avatar & { id: string; x: number; y: number; direction: 'up' | 'down' | 'left' | 'right'; moving: boolean; seated: boolean; seatId: string | null; hand: boolean; mic: boolean; camera: boolean; sharing: boolean; reaction: string; reactionAt: number; availability: Availability; statusText: string };
+export type AccountUser = { id:string; email:string; username:string; name:string; dateOfBirth:string; bio:string; jobTitle:string; company:string; avatar:Avatar; photoUrl:string|null; createdAt:string };
+export type AccountDetails = {name:string;username:string;dateOfBirth:string;bio?:string;jobTitle?:string;company?:string};
+export type Player = Avatar & { id: string; photoUrl?:string|null; x: number; y: number; direction: 'up' | 'down' | 'left' | 'right'; moving: boolean; seated: boolean; seatId: string | null; hand: boolean; mic: boolean; camera: boolean; sharing: boolean; reaction: string; reactionAt: number; availability: Availability; statusText: string };
 export type ChatMessage = { id: string; playerId: string; name: string; color: string; text: string; time: number; kind: 'message' | 'question'; recipientId?: string; zoneId?: string; replyTo?: string };
 export type CampusEvent = { id: string; title: string; startAt: number; duration: number; zoneId: string; creatorId: string; creatorName: string };
 export type MeetingNote = { id: string; text: string; zoneId: string; authorId: string; authorName: string; time: number };

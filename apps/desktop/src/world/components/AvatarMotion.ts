@@ -1,5 +1,7 @@
+import { reactions } from '../reactions.ts';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type AvatarPose = {
+  dance:number;laugh:number;think:number;coffee:number;heart:number;surprise:number;sleep:number;
   phase:number; walk:number; seat:number; raised:number; wave:number; clap:number; celebrate:number;
   facing:number; back:number; gestureTime:number; blink:number; breath:number; lean:number; hairSway:number;
 };
@@ -8,7 +10,7 @@ export type AvatarMotion = { x:number; y:number; time:number; seed:number; pose:
 
 export function createAvatarMotion(id:string,x=0,y=0):AvatarMotion {
   const seed=[...id].reduce((value,char)=>(value*31+char.charCodeAt(0))>>>0,7)%5200;
-  return {x,y,time:-1,seed,pose:{phase:seed/5200*Math.PI*2,walk:0,seat:0,raised:0,wave:0,clap:0,celebrate:0,facing:0,back:0,gestureTime:0,blink:0,breath:0,lean:0,hairSway:0}};
+  return {x,y,time:-1,seed,pose:{dance:0,laugh:0,think:0,coffee:0,heart:0,surprise:0,sleep:0,phase:seed/5200*Math.PI*2,walk:0,seat:0,raised:0,wave:0,clap:0,celebrate:0,facing:0,back:0,gestureTime:0,blink:0,breath:0,lean:0,hairSway:0}};
 }
 
 const approach=(value:number,target:number,speed:number,dt:number)=>value+(target-value)*(1-Math.exp(-speed*dt));
@@ -19,17 +21,19 @@ export function advanceAvatarMotion(state:AvatarMotion,input:MotionInput,time:nu
   const walking=input.moving&&!input.seated&&distance>.015&&distance<80;
   const reactionAge=input.reactionAge??Infinity;
   const reacting=reactionAge>=0&&reactionAge<2400;
-  const wave=reacting&&input.reaction==='👋',clap=reacting&&input.reaction==='👏',celebrate=reacting&&input.reaction==='🎉';
+  const motion=reacting?reactions.find(reaction=>reaction.emoji===input.reaction)?.motion:undefined;
+  const wave=reacting&&motion==='wave',clap=reacting&&motion==='clap',celebrate=reacting&&motion==='celebrate';
   const facing=input.direction==='right'?1:input.direction==='left'?-1:0;
   const p=state.pose;
   if(walking&&!reducedMotion)p.phase=(p.phase+distance/160*Math.PI*2)%(Math.PI*2);
-  const blend=(key:'walk'|'seat'|'raised'|'wave'|'clap'|'celebrate'|'facing'|'back',target:number,speed=13)=>{
+  const blend=(key:'dance'|'laugh'|'think'|'coffee'|'heart'|'surprise'|'sleep'|'walk'|'seat'|'raised'|'wave'|'clap'|'celebrate'|'facing'|'back',target:number,speed=13)=>{
     p[key]=reducedMotion?target:approach(p[key],target,speed,dt||1/60);
   };
   blend('walk',reducedMotion?0:Number(walking),walking?16:20);
   blend('seat',Number(input.seated),12);
   blend('raised',Number(!!input.hand),10);
   blend('wave',Number(wave),14);blend('clap',Number(clap),14);blend('celebrate',Number(celebrate),12);
+  for(const gesture of ['dance','laugh','think','coffee','heart','surprise','sleep'] as const)blend(gesture,Number(motion===gesture),12);
   p.gestureTime=reducedMotion?0:reacting?reactionAge:0;
   blend('facing',facing,15);blend('back',Number(input.direction==='up'),15);
   const idleTime=time+state.seed;

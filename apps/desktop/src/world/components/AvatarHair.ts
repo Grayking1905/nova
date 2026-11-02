@@ -4,6 +4,7 @@ import type { AvatarContext } from './AvatarPaint';
 import { capsule, oval, material, stroke } from './AvatarPaint';
 
 export function drawHairBack(c:AvatarContext,avatar:Avatar,p:AvatarPose) {
+  if(avatar.style==='bun'||avatar.style==='ponytail'){c.save();c.translate(0,-84);c.rotate(p.hairSway);if(avatar.style==='bun'){oval(c,7,-17,12,11,avatar.hair);oval(c,4,-20,5,3,'#ffffff18');}else{material(c,14,-1,13,44,7,avatar.hair,.18);capsule(c,13,0,15,4,2,avatar.shirt);}c.restore();return;}
   if(avatar.style!=='long')return;
   c.save();c.translate(0,-66);c.rotate(p.hairSway);
   material(c,-24,-26,48,60,19,avatar.hair,.2);
@@ -23,7 +24,8 @@ export function drawHairFront(c:AvatarContext,avatar:Avatar,p:AvatarPose) {
     c.restore();
   }
   c.save();c.globalAlpha=1-p.back;
-  if(avatar.style==='curly') {
+  if(avatar.style==='buzz'){material(c,-21,-20,42,18,11,avatar.hair,.12);stroke(c,[[-12,-13],[12,-13]],'#ffffff20',2);}
+  else if(avatar.style==='curly') {
     for(const [x,y,r] of [[-16,-12,9],[-7,-18,10],[5,-19,10],[15,-13,9],[-19,-1,7],[19,-1,7]]) {
       oval(c,x,y,r,r,avatar.hair);oval(c,x-2,y-3,r*.45,r*.3,'#ffffff13');
     }

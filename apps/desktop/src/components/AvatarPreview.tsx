@@ -3,7 +3,7 @@ import type { Avatar } from '../types';
 import { drawAvatar } from '../world/draw';
 import { createAvatarMotion, advanceAvatarMotion } from '../world/components/AvatarMotion';
 import type { Facing } from '../world/components/AvatarMotion';
-export type AvatarPreviewMode='idle'|'walk'|'turn'|'sit'|'wave';
+export type AvatarPreviewMode='idle'|'walk'|'turn'|'sit'|'wave'|'dance'|'laugh'|'coffee'|'think'|'celebrate'|'heart'|'surprise'|'sleep'|'clap';
 
 export function AvatarPreview({avatar,size=170,mode='idle',portrait=false}:{avatar:Avatar;size?:number;mode?:AvatarPreviewMode;portrait?:boolean}) {
   const ref=useRef<HTMLCanvasElement>(null),current=useRef({avatar,mode,portrait});
@@ -18,10 +18,11 @@ export function AvatarPreview({avatar,size=170,mode='idle',portrait=false}:{avat
       if(props.mode==='walk')x+=dt*340;
       const directions:Facing[]=['down','right','up','left'];
       const direction=props.mode==='turn'?(reduced?'right':directions[Math.floor((now-start)/1250)%4]):'down';
-      const pose=advanceAvatarMotion(motion,{x,y:0,moving:props.mode==='walk',direction,seated:props.mode==='sit',reaction:props.mode==='wave'?'👋':'',reactionAge:(now-start)%(Math.PI*2*115*3)},now,reduced);
+      const gestures:Record<string,string>={wave:'👋',dance:'💃',laugh:'😂',coffee:'☕',think:'🤔',celebrate:'🎉',heart:'💜',surprise:'😮',sleep:'😴',clap:'👏'};
+      const pose=advanceAvatarMotion(motion,{x,y:0,moving:props.mode==='walk',direction,seated:props.mode==='sit',reaction:gestures[props.mode]||'',reactionAge:(now-start)%(Math.PI*2*115*3)},now,reduced);
       c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,320,320);c.save();
-      if(props.portrait){c.translate(160,450);c.scale(4.25,4.25);}else{c.translate(160,271);c.scale(2.55,2.55);}
-      drawAvatar(c,props.avatar,0,0,{pose,tick:reduced?0:now,selected:!props.portrait});c.restore();animation=requestAnimationFrame(frame);
+      if(props.portrait){c.translate(160,450);c.scale(4.25,4.25);}else{c.translate(160,283);c.scale(2.15,2.15);}
+      drawAvatar(c,props.avatar,0,0,{pose,tick:reduced?0:now,selected:!props.portrait,reducedMotion:reduced});c.restore();animation=requestAnimationFrame(frame);
     };
     animation=requestAnimationFrame(frame);
     return()=>{cancelAnimationFrame(animation);preference.removeEventListener('change',onPreference);};

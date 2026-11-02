@@ -33,17 +33,24 @@ export function workspaceStore(client) {
       const row = await client.workspace.findFirst({ where: { OR: [{ id: code }, { worldSeed: code }] }, include: { state: true } });
       if (!row) return null;
       return { id: row.id, worldSeed: row.worldSeed, name: row.name, private: row.private, password: row.passwordHash, salt: row.passwordSalt,
-        messages: row.state?.messages || [], events: row.state?.events || [], notes: row.state?.notes || [], boards: row.state?.boards || {}, fixtureStates: row.state?.fixtureStates || {} };
+        messages: row.state?.messages || [], events: row.state?.events || [], notes: row.state?.notes || [], boards: row.state?.boards || {}, fixtureStates: row.state?.fixtureStates || {}, library: row.state?.library || {folders:[],files:[]} };
     },
     list: () => client.workspace.findMany({ where: { private: false }, select: { id: true, name: true }, orderBy: { createdAt: 'asc' }, take: 100 }),
     async save(room, fields) {
-      // Direct messages belong to connection identities, not persistent user accounts.
-      const data = Object.fromEntries(fields.map(field => [field, field === 'messages' ? room.messages.filter(message => !message.recipientId) : room[field]]));
+      // Authenticated player IDs are persistent account IDs; welcome history is filtered by recipient.
+      const data = Object.fromEntries(fields.map(field => [field, room[field]]));
       await client.workspaceState.upsert({ where: { workspaceId: room.id }, create: { workspaceId: room.id, ...data }, update: data });
     },
     putAsset: (roomId, id, asset) => client.asset.create({ data: { id, workspaceId: roomId, type: asset.type, data: asset.data } }),
     getAsset: (roomId, id) => client.asset.findFirst({ where: { id, workspaceId: roomId } }),
-    countAssets: roomId => client.asset.count({ where: { workspaceId: roomId } }),
+    countAssets: roomId => client.asset.count({ where: { workspaceId: roomId, purpose: 'presentation' } }),
+    async saveLibrary(roomId, library, change = {}) {
+      await client.$transaction(async tx => {
+        if(change.put)await tx.asset.create({data:{...change.put,workspaceId:roomId,purpose:'library'}});
+        if(change.remove)await tx.asset.deleteMany({where:{id:change.remove,workspaceId:roomId,purpose:'library'}});
+        await tx.workspaceState.update({where:{workspaceId:roomId},data:{library}});
+      });
+    },
     close: () => client.$disconnect(),
   };
 }

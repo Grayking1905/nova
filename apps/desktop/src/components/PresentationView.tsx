@@ -11,7 +11,7 @@ export function PresentationView({source,stream,mine,onPage,assetToken}:{assetTo
   useEffect(()=>{
     if(source.kind==='screen')return;
     const controller=new AbortController();let objectUrl='';let cancelled=false;
-    void fetch(`${API}${source.url}`,{signal:controller.signal,headers:{Authorization:`Bearer ${assetToken}`}}).then(async response=>{
+    void fetch(`${API}${source.url}`,{credentials:'include',signal:controller.signal,headers:{Authorization:`Bearer ${assetToken}`}}).then(async response=>{
       if(!response.ok)throw new Error();
       if(source.kind==='slides'){const value=await response.json();if(!cancelled)setDeck(value);}
       else{const blob=await response.blob();if(!cancelled){objectUrl=URL.createObjectURL(blob);setAssetUrl(objectUrl);}}

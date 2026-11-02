@@ -3,7 +3,8 @@ import { ArrowRight, Coffee, Gamepad2, HelpCircle, MapPin, MessageCircle, PenToo
 import { drawAvatar, drawMap } from '../world/draw';
 import { SPAWN, WORLD } from '../world/map';
 import { AvatarPreview } from './AvatarPreview';
-import type { Avatar } from '../types';
+import { UserPhoto } from './auth/UserPhoto';
+import type { AccountUser, Avatar } from '../types';
 
 const sample: Avatar = { name: 'Maya', skin: '#d8a17b', hair: '#302332', shirt: '#8a70bc', style: 'long' };
 function CampusPreview() {
@@ -19,11 +20,11 @@ function CampusPreview() {
   return <canvas ref={ref} width={1200} height={867} aria-label="Preview of Nova’s nine-room campus" />;
 }
 
-export function WelcomeScreen({ onEnter, onHelp }: { onEnter: () => void; onHelp: () => void }) {
+export function WelcomeScreen({ onEnter, onHelp, user, onProfile }: { onEnter: () => void; onHelp: () => void; user:AccountUser;onProfile:()=>void }) {
   return <>
     <header className="landing-header">
       <a className="brand" href="./"><span className="brand-symbol">n<span>·</span></span><strong>nova<span>your little work world</span></strong></a>
-      <nav className="landing-nav" aria-label="Welcome navigation"><a href="#possibilities">The possibilities</a><button className="quiet-button" onClick={onHelp}><HelpCircle size={17} /> How to play</button><button className="outline-button" onClick={onEnter}>Join your team <ArrowRight size={16} /></button></nav>
+      <nav className="landing-nav" aria-label="Welcome navigation"><button className="landing-account" onClick={onProfile}><UserPhoto name={user.name} url={user.photoUrl}/><span>Hi, {user.name.split(' ')[0]}<small>Your profile</small></span></button><a href="#possibilities">The possibilities</a><button className="quiet-button" onClick={onHelp}><HelpCircle size={17} /> How to play</button><button className="outline-button" onClick={onEnter}>Join your team <ArrowRight size={16} /></button></nav>
     </header>
     <main className="landing-main">
       <section className="hero-copy">

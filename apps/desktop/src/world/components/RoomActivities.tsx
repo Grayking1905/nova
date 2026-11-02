@@ -1,7 +1,8 @@
-import { Coffee, Gamepad2, BookOpen, Droplets, Lightbulb, MonitorUp, PenTool, Sprout, Pin } from 'lucide-react';
+import { Coffee, Gamepad2, BookOpen, Droplets, Lightbulb, MonitorUp, PenTool, Sprout, Pin, Timer } from 'lucide-react';
 import { fixtures } from '../map';
 
 const activities=[
+  {type:'desk',icon:Timer},
   {type:'screen',icon:MonitorUp},{type:'board',icon:PenTool},{type:'coffee',icon:Coffee},
   {type:'arcade',icon:Gamepad2},{type:'fountain',icon:Droplets},{type:'shelf',icon:BookOpen},
   {type:'lamp',icon:Lightbulb},{type:'plant',icon:Sprout},{type:'noticeboard',icon:Pin},

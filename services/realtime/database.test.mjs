@@ -68,11 +68,18 @@ test('PostgreSQL retains private workplaces, room state and assets across server
   const upload = await fetch(`${first.base}/upload`, { method: 'POST', headers: { Authorization: `Bearer ${aw.token}`, 'Content-Type': 'application/pdf' }, body: '%PDF-1.4 QA' });
   assert.equal(upload.status, 201); const asset = await upload.json();
   assert.equal(await db.space.count({ where: { workspaceId: aw.room.id } }), 9);
+  const shelf=(await import('../../apps/desktop/src/world/map.ts')).fixtures.find(f=>f.type==='shelf');
+  const folderResponse=await fetch(`${first.base}/library/folders`,{method:'POST',headers:{Authorization:`Bearer ${aw.token}`,'Content-Type':'application/json'},body:JSON.stringify({name:'Saved team files',shelfId:shelf.id})});
+  assert.equal(folderResponse.status,200);const folder=(await folderResponse.json()).folders[0];await a.wait('library');
+  const resourceResponse=await fetch(`${first.base}/library/upload`,{method:'POST',headers:{Authorization:`Bearer ${aw.token}`,'Content-Type':'text/plain','X-File-Name':'Handbook.txt','X-Folder-Id':folder.id,'X-Shelf-Id':shelf.id},body:'A persistent shared handbook'});
+  assert.equal(resourceResponse.status,200);const resource=(await resourceResponse.json()).files[0];await a.wait('library');
   await first.service.close(); servers.pop();
   const second = await listen(store); servers.push(second.service);
   const denied = await participant(second.address, { roomId: aw.room.worldSeed, password: 'wrong' }); assert.match((await denied.wait('error')).message, /password/);
   const b = await participant(second.address, { roomId: aw.room.worldSeed, password: 'test-only-password' }); const bw = await b.wait('welcome');
   assert.equal(bw.room.id, aw.room.id); assert.equal(bw.messages[0].text, 'A durable idea'); assert.equal(bw.notes[0].text, 'A durable note'); assert.equal(bw.boards.board.length, 1);
+  assert.equal(bw.library.folders[0].name,'Saved team files');assert.equal(bw.library.files[0].id,resource.id);
+  const resourceDownload=await fetch(`${second.base}/assets/${resource.id}`,{headers:{Authorization:`Bearer ${bw.token}`}});assert.equal(await resourceDownload.text(),'A persistent shared handbook');
   assert.equal(bw.players.length, 1); assert.equal(bw.presentation, null);
   const peer = await participant(second.address, { roomId: aw.room.id, password: 'test-only-password' }); assert.equal((await peer.wait('welcome')).players.length, 2);
   assert.equal((await fetch(`${second.base}${asset.url}`)).status, 401);

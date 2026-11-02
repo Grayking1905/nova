@@ -1,4 +1,9 @@
 import http from 'node:http';
+import { createAuth } from './auth.mjs';
+import { avatarProfile } from './identity.mjs';
+import { serveFrontend } from './static.mjs';
+import { libraryHandler } from './library.mjs';
+import { reactions } from '../../apps/desktop/src/world/reactions.ts';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { persistentFields, connectDatabase, workspaceStore } from './database.mjs';
 import { pathToFileURL } from 'node:url';
@@ -8,11 +13,11 @@ import { WORLD, SPAWN, fixtures, fixtureDistance, canStand, zones } from '../../
 const MAX_FILE = 20 * 1024 * 1024;
 const clean = (value, max = 40) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const color = (value, fallback) => /^#[a-f\d]{6}$/i.test(value) ? value : fallback;
-const profile = value => ({ name: clean(value?.name, 24) || 'Teammate', skin: color(value?.skin, '#d8a17b'), hair: color(value?.hair, '#302332'), shirt: color(value?.shirt, '#8b7cf8'), style: ['short', 'long', 'curly'].includes(value?.style) ? value.style : 'short' });
-const makeRoom = (id, name, password = '') => ({ id, worldSeed: randomBytes(16).toString('hex'), name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], events: [], notes: [], strokes: [], boards: {board:[]}, fixtureStates: {}, presentation: null, assets: new Map() });
+const profile = avatarProfile;
+const makeRoom = (id, name, password = '') => ({ id, worldSeed: randomBytes(16).toString('hex'), name, private: !!password, salt: randomBytes(16).toString('hex'), password, players: new Map(), messages: [], events: [], notes: [], library:{folders:[],files:[]}, strokes: [], boards: {board:[]}, fixtureStates: {}, presentation: null, assets: new Map() });
 const visibleMessage = (message, id) => !message.recipientId || message.playerId === id || message.recipientId === id;
 
-export function createOfficeServer({ store = null } = {}) {
+export function createOfficeServer({ store = null, auth = null } = {}) {
   const rooms = new Map();
   rooms.set('nova-campus', makeRoom('nova-campus', 'Nova Campus'));
   const hydrate = row => { const room = Object.assign(makeRoom(row.id,row.name),row); room.strokes=room.boards.board||[]; rooms.set(room.id,room); return room; };
@@ -23,14 +28,21 @@ export function createOfficeServer({ store = null } = {}) {
   const sendNow = (socket, data) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); };
   const broadcastNow = (room, data, except) => { for (const [socket, client] of clients) if (client.room === room && socket !== except) sendNow(socket, data); };
   const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+  const enqueue=work=>{const task=queue.then(work);queue=task.catch(()=>{});return task;};
+  const handleLibrary=libraryHandler({clients,store,enqueue,broadcast:broadcastNow,json});
   const server = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN || '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    if(auth){if(!auth.cors(req,res))return json(res,403,{error:'Origin is not allowed.'});}
+    else res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Nova-Request, X-File-Name, X-Folder-Id, X-Shelf-Id');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     try { await ready; } catch { return json(res,503,{error:'Database unavailable.'}); }
     const url = new URL(req.url || '/', 'http://localhost');
+    if(url.pathname.startsWith('/auth/'))return auth?auth.handle(req,res,url,json):json(res,503,{error:'Account service unavailable.'});
+    if(req.method==='GET'&&await serveFrontend(req,res,url))return;
+    if(auth&&url.pathname!=='/health'){try{const identity=await auth.getSession(req);if(!identity)return json(res,401,{error:'Sign in to continue.'});const member=[...clients.values()].find(c=>c.token===req.headers.authorization?.replace('Bearer ',''));if(member&&member.userId!==identity.user.id)return json(res,403,{error:'This workplace session belongs to another account.'});}catch{return json(res,503,{error:'Account service unavailable.'});}}
+    if(url.pathname==='/library'||url.pathname.startsWith('/library/'))return handleLibrary(req,res,url);
     if (url.pathname === '/health') return json(res, 200, { status: 'ok', rooms: rooms.size, participants: clients.size });
     if (url.pathname === '/rooms') {try {const listing=store?await store.list():[...rooms.values()].filter(r=>!r.private);return json(res,200,listing.map(r=>({id:r.id,name:r.name,count:rooms.get(r.id)?.players.size||0})));}catch{return json(res,503,{error:'Database unavailable.'});}}
     if (url.pathname.startsWith('/assets/') && req.method === 'GET') {
@@ -40,7 +52,7 @@ export function createOfficeServer({ store = null } = {}) {
       const id=url.pathname.split('/').pop();
       try {
         const asset=store?await store.getAsset(client.room.id,id):client.room.assets.get(id);
-        if(asset){res.writeHead(200,{'Content-Type':asset.type,'Content-Length':asset.data.length,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; sandbox"});res.end(Buffer.from(asset.data));return;}
+        if(asset){if(asset.purpose==='library'){const entry=client.room.library.files.find(file=>file.id===id);res.setHeader('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(entry?.name||'resource')}`);}res.writeHead(200,{'Content-Type':asset.type,'Content-Length':asset.data.length,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; sandbox"});res.end(Buffer.from(asset.data));return;}
         return json(res,404,{error:'This file is not available in your workplace.'});
       }catch{return json(res,503,{error:'The file could not be loaded.'});}
     }
@@ -57,7 +69,7 @@ export function createOfficeServer({ store = null } = {}) {
         if (!clients.has(client.socket)) return json(res, 401, { error: 'Room session ended.' });
         const data = Buffer.concat(chunks);
         if (type === 'application/json') { const deck = JSON.parse(data.toString()); if (!Array.isArray(deck.slides) || deck.slides.length > 200) throw new Error('Invalid deck'); }
-        if ((store?await store.countAssets(client.room.id):client.room.assets.size) >= 8) return json(res, 409, { error: 'Room file limit reached. Start a new room for more files.' });
+        if ((store?await store.countAssets(client.room.id):[...client.room.assets.values()].filter(a=>a.purpose!=='library').length) >= 8) return json(res, 409, { error: 'Room file limit reached. Start a new room for more files.' });
         const id=randomUUID();if(store)await store.putAsset(client.room.id,id,{data,type});client.room.assets.set(id,{data,type});json(res,201,{url:`/assets/${id}`});
       } catch { if (!res.headersSent) json(res, 400, { error: 'The file could not be read.' }); }
       return;
@@ -65,7 +77,10 @@ export function createOfficeServer({ store = null } = {}) {
     json(res, 404, { error: 'Not found' });
   });
   const wss = new WebSocketServer({ server, maxPayload: 128 * 1024 });
-  wss.on('connection', socket => {
+  if(auth){auth.onSessionsRevoked=(userId,tokenHash)=>{for(const [socket,c] of clients)if(c.userId===userId&&(!tokenHash||c.sessionHash===tokenHash))socket.close(4401,'Session ended');};auth.onUserChanged=user=>{for(const [socket,c] of clients)if(c.userId===user.id){const p=c.room.players.get(c.id);Object.assign(p,user.avatar,{name:user.name.slice(0,24),photoUrl:user.photoUrl});broadcastNow(c.room,{type:'player',player:p});}};}
+  const expirationTimer=auth?setInterval(()=>{for(const [socket,c] of clients)if(c.expiresAt<=Date.now())socket.close(4401,'Session expired');},60000):null;expirationTimer?.unref();
+  wss.on('connection', (socket,req) => {
+    const identityPromise=auth?auth.authorizeSocket(req).catch(()=>null):Promise.resolve(null);
     const joinTimeout = setTimeout(() => { if (!clients.has(socket)) socket.close(1008, 'Join timeout'); }, 15000);
     let pending=0;
     const handle = async raw => {
@@ -74,6 +89,8 @@ export function createOfficeServer({ store = null } = {}) {
       try {
         await ready;
 
+        // Recheck pending joins: a cookie may have been revoked since the socket opened.
+        const identity=auth&&!clients.has(socket)?await auth.authorizeSocket(req):await identityPromise;if(auth&&(!identity||identity.expiresAt<=Date.now())){sendNow(socket,{type:'error',code:'AUTH_REQUIRED',message:'Sign in to enter a workplace.'});socket.close(4401,'Sign in required');return;}
         const message = JSON.parse(raw.toString()); let client = clients.get(socket);
         if (!client) {
           if (message.type !== 'join') return;
@@ -93,10 +110,12 @@ export function createOfficeServer({ store = null } = {}) {
           }
           if(socket.readyState!==WebSocket.OPEN)return;
           if (room.players.size >= 12) return send(socket, { type: 'error', message: 'This room is full (12 people).' });
-          const id = randomUUID(); const p = { id, ...profile(message.profile), x: SPAWN.x + ((room.players.size % 4)-1.5) * 44, y: SPAWN.y + Math.floor(room.players.size/4)*40, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, seatId: null, reaction: '', reactionAt: 0, availability: 'available', statusText: '' };
-          client = { id, room, token: randomBytes(24).toString('hex'), socket, lastMessage: 0, windowStart: Date.now(), count: 0 };
+          if(identity&&room.players.has(identity.user.id))return send(socket,{type:'error',message:'You are already in this workplace in another tab.'});
+          if(identity)await auth.joined(identity.user.id,room.id,!!message.create);
+          const id = identity?.user.id||randomUUID(); const p = { id, ...profile(identity?.user.avatar||message.profile), photoUrl:identity?.user.photoUrl||null, x: SPAWN.x + ((room.players.size % 4)-1.5) * 44, y: SPAWN.y + Math.floor(room.players.size/4)*40, direction: 'down', moving: false, hand: false, mic: false, camera: false, sharing: false, seated: false, seatId: null, reaction: '', reactionAt: 0, availability: 'available', statusText: '' };
+          client = { id, room, userId:identity?.user.id, sessionHash:identity?.tokenHash, expiresAt:identity?.expiresAt, token: randomBytes(24).toString('hex'), socket, lastMessage: 0, windowStart: Date.now(), count: 0 };
           clients.set(socket, client); room.players.set(id, p); clearTimeout(joinTimeout);
-          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private, worldSeed: room.worldSeed }, players: [...room.players.values()], messages: room.messages.filter(m=>visibleMessage(m,id)), events: room.events, notes: room.notes, strokes: room.strokes, boards: room.boards, fixtureStates: room.fixtureStates, presentation: room.presentation });
+          send(socket, { type: 'welcome', id, token: client.token, room: { id: room.id, name: room.name, private: room.private, worldSeed: room.worldSeed }, players: [...room.players.values()], messages: room.messages.filter(m=>visibleMessage(m,id)), events: room.events, notes: room.notes, strokes: room.strokes, boards: room.boards, fixtureStates: room.fixtureStates, presentation: room.presentation, library: room.library });
           broadcast(room, { type: 'player', player: p }, socket); return;
         }
         const now = Date.now(); if (now - client.windowStart > 1000) { client.windowStart = now; client.count = 0; }
@@ -133,7 +152,7 @@ export function createOfficeServer({ store = null } = {}) {
             for (const key of ['hand', 'mic', 'camera', 'sharing']) if (typeof message[key] === 'boolean') p[key] = message[key];
             if (['available','focus','away'].includes(message.availability)) p.availability = message.availability;
             if (typeof message.statusText === 'string') p.statusText = clean(message.statusText,60);
-            if (typeof message.reaction === 'string' && ['👋', '👏', '💜', '🎉', '👍', '💡'].includes(message.reaction)) { p.reaction = message.reaction; p.reactionAt = now; }
+            if (typeof message.reaction === 'string' && reactions.some(reaction=>reaction.emoji===message.reaction)) { p.reaction = message.reaction; p.reactionAt = now; }
             broadcast(room, { type: 'player', player: p }); break;
           }
           case 'chat': {
@@ -156,7 +175,7 @@ export function createOfficeServer({ store = null } = {}) {
             if(chat.recipientId){for(const [target,c] of clients)if(c.room===room&&visibleMessage(chat,c.id))send(target,{type:'chat',message:chat});}
             else broadcast(room, { type: 'chat', message: chat }); break;
           }
-          case 'profile': { Object.assign(p,profile(message.profile)); broadcast(room,{type:'player',player:p}); break; }
+          case 'profile': { if(identity){const user=await auth.saveAvatar(identity.user.id,message.profile);Object.assign(p,user.avatar);}else Object.assign(p,profile(message.profile)); broadcast(room,{type:'player',player:p}); break; }
           case 'event-create': {
             const title=clean(message.title,80),startAt=message.startAt,duration=message.duration;
             if(!title||!Number.isFinite(startAt)||startAt<now-60000||startAt>now+90*86400000||!Number.isInteger(duration)||duration<5||duration>240||!zones.some(z=>z.id===message.zoneId))return send(socket,{type:'error',message:'Choose a meeting time within the next 90 days and a duration of 5–240 minutes.'});
@@ -213,12 +232,12 @@ export function createOfficeServer({ store = null } = {}) {
     });
     socket.on('error', () => socket.close());
   });
-  return { server, wss, rooms, ready, close: async () => {closing=true;await queue;await new Promise(resolve=>{for(const socket of wss.clients)socket.terminate();wss.close();server.close(resolve);});await store?.close();} };
+  return { server, wss, rooms, ready, close: async () => {closing=true;if(expirationTimer)clearInterval(expirationTimer);await queue;await new Promise(resolve=>{for(const socket of wss.clients)socket.terminate();wss.close();server.close(resolve);});await store?.close();} };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const store=workspaceStore(await connectDatabase());const service=createOfficeServer({store});await service.ready;
+    const database=await connectDatabase();const store=workspaceStore(database);const service=createOfficeServer({store,auth:createAuth(database)});await service.ready;
     const port=Number(process.env.PORT||3001);service.server.listen(port,process.env.HOST||'127.0.0.1',()=>console.log(`Nova room server listening on http://localhost:${port} (PostgreSQL connected)`));
     for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{void service.close().then(()=>process.exit(0));});
   } catch { console.error('Nova could not start. Check DATABASE_URL in the root .env and run pnpm db:migrate.');process.exitCode=1; }

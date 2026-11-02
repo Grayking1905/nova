@@ -1,0 +1,17 @@
+import { useEffect, useRef, useState } from 'react';
+import { Check, Moon, Play, Square, Timer } from 'lucide-react';
+import { Dialog } from '../../components/Dialog';
+import type { Player } from '../../types';
+
+export function FocusSession({open,onOpen,onClose,me,send}:{open:boolean;onOpen:()=>void;onClose:()=>void;me?:Player;send:(message:Record<string,unknown>)=>void}){
+  const [minutes,setMinutes]=useState(25),[goal,setGoal]=useState(''),[session,setSession]=useState<{end:number;goal:string;previous:string;previousText:string}|null>(null),[now,setNow]=useState(()=>Date.now());
+  const completed=useRef(0);
+  const current=useRef({me,send});useEffect(()=>{current.current={me,send};},[me,send]);
+  useEffect(()=>{if(!session)return;const timer=setInterval(()=>{setNow(Date.now());if(Date.now()>=session.end)clearInterval(timer);},1000);return()=>clearInterval(timer);},[session]);
+  const finish=()=>{if(session&&current.current.me?.availability==='focus')send({type:'status',availability:session.previous,statusText:session.previousText});setSession(null);};
+  useEffect(()=>{if(session&&now>=session.end&&completed.current!==session.end){completed.current=session.end;if(current.current.me?.availability==='focus')current.current.send({type:'status',availability:session.previous,statusText:session.previousText});}},[session,now]);
+  const remaining=session?Math.max(0,Math.ceil((session.end-now)/1000)):0;
+  return <>{session&&<div className={`focus-session-chip ${remaining===0?'complete':''}`}><button onClick={onOpen} title={session.goal}><Moon size={14}/>{remaining?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')} · ${session.goal||'In the flow'}`:'Focus complete · nice work'}</button><button aria-label="End focus session" onClick={finish}>×</button></div>}
+    {open&&<Dialog title="A little room to find your flow." onClose={onClose}><div className="focus-session-art"><Timer size={38}/><span>{session?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'Make one good thing happen.'}</span></div><p className="dialog-description">Set an intention, settle at your desk, and give yourself a little quiet. Proximity conversations pause while you focus.</p>{session?<><p className="focus-goal">{session.goal}</p><button className="primary-button" onClick={finish}>{remaining?<Square size={15}/>:<Check size={15}/>} {remaining?'End focus session':'Finish & reconnect'}</button></>:<form onSubmit={e=>{e.preventDefault();const start=Date.now();setNow(start);setSession({end:start+minutes*60000,goal:goal.trim(),previous:me?.availability||'available',previousText:me?.statusText||''});send({type:'status',availability:'focus',statusText:goal.trim()||'A little focused work'});onClose();}}><label className="field-label">One thing to work on<input aria-label="Focus intention" maxLength={60} value={goal} onChange={e=>setGoal(e.target.value)} placeholder="Finish the first draft…"/></label><div className="wardrobe-options">{[15,25,50].map(value=><button type="button" key={value} className={minutes===value?'selected':''} aria-pressed={minutes===value} onClick={()=>setMinutes(value)}>{value} minutes</button>)}</div><button className="primary-button" style={{marginTop:20}}><Play size={15}/> Find my flow</button></form>}<p className="dialog-note">The timer runs while you stay in this workplace. When it ends, your previous availability returns.</p></Dialog>}
+  </>;
+}

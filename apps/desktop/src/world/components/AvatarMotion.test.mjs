@@ -32,3 +32,14 @@ test('reduced motion preserves pose and direction without idle or stride motion'
   assert.equal(p.phase,phase);assert.equal(p.walk,0);assert.equal(p.seat,1);assert.equal(p.raised,1);assert.equal(p.back,1);
   for(const key of ['blink','breath','lean','hairSway','gestureTime'])assert.equal(p[key],0);
 });
+
+test('new gestures ease out after a reaction and retain calm poses with reduced motion',()=>{
+  for(const [reaction,key] of [['💃','dance'],['😂','laugh'],['☕','coffee'],['🤔','think'],['❤️','heart'],['😮','surprise'],['😴','sleep']]){
+    const state=createAvatarMotion(reaction);advanceAvatarMotion(state,input,0);
+    for(let frame=1;frame<=30;frame++)advanceAvatarMotion(state,{...input,reaction,reactionAge:frame*16},frame*16);
+    assert.ok(state.pose[key]>.99,`${key} reaches its pose`);
+    for(let frame=31;frame<=90;frame++)advanceAvatarMotion(state,{...input,reaction,reactionAge:4000},frame*16);
+    assert.ok(state.pose[key]<.001,`${key} settles when finished`);
+    const reduced=advanceAvatarMotion(state,{...input,reaction,reactionAge:100},2000,true);assert.equal(reduced[key],1);assert.equal(reduced.gestureTime,0);
+  }
+});

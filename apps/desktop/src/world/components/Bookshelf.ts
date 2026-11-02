@@ -19,5 +19,17 @@ export function drawBookshelf(c: Context, f: Fixture) {
   rect(c, x + 4, y + h - 12, w - 8, 6, 1, '#d4bd99');
 }
 
-export function animateBookshelf(c:Context,f:Fixture,frame:ComponentFrame) { if(frame.active){c.save();c.globalAlpha=Math.sin(Math.PI*frame.progress);rect(c,f.x+f.w*.45,f.y-10-frame.progress*15,24,29,3,'#fff1ca','#d3bb8e');c.restore();}shimmer(c,f,frame); }
+export function animateBookshelf(c:Context,f:Fixture,frame:ComponentFrame) {
+  if(frame.active){
+    const lift=frame.reducedMotion?0:Math.sin(Math.PI*frame.progress)*15;
+    c.save();c.globalAlpha=Math.sin(Math.PI*frame.progress);
+    rect(c,f.x+f.w*.43,f.y-14-lift,25,5,2,'#d5ba83');
+    rect(c,f.x+f.w*.4,f.y-10-lift,34,25,4,'#e8d4a9','#b99b68');
+    rect(c,f.x+f.w*.43,f.y-5-lift,28,17,2,'#fff5df');
+    line(c,f.x+f.w*.47,f.y-lift,f.x+f.w*.64,f.y-lift,'#bda487');
+    line(c,f.x+f.w*.47,f.y+5-lift,f.x+f.w*.61,f.y+5-lift,'#d0bfa3');
+    c.restore();
+  }
+  shimmer(c,f,frame);
+}
 export function poseBookshelf(frame:ComponentFrame) {return {y:spring(frame)*-3,angle:spring(frame)*0.04};}

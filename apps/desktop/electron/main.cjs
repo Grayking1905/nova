@@ -1,12 +1,15 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, session } = require("electron");
+const { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } = require("electron");
 const path = require("path");
 
 const isDevelopment = !app.isPackaged && !process.argv.includes('--production');
+const applicationURL = isDevelopment ? 'http://localhost:5173' : (process.env.NOVA_APP_URL || 'http://localhost:3001');
+const target = new URL(applicationURL);
+if (target.protocol !== 'https:' && !(target.protocol === 'http:' && ['localhost','127.0.0.1'].includes(target.hostname))) throw new Error('Use HTTPS or a loopback server for the desktop app.');
 let mainWindow;
 let selectedSource = null;
 function trustedFrame(frame) {
   if (!mainWindow || frame !== mainWindow.webContents.mainFrame) return false;
-  return isDevelopment ? /^http:\/\/(localhost|127\.0\.0\.1):5173\//.test(frame.url) : frame.url.startsWith('file://');
+  try { return new URL(frame.url).origin === target.origin; } catch { return false; }
 }
 
 function createWindow() {
@@ -16,7 +19,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
 
-    backgroundColor: "#0b0f14",
+    backgroundColor: "#f7f9ef",
 
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -27,13 +30,9 @@ function createWindow() {
     }
   });
 
-  if (isDevelopment) {
-    mainWindow.loadURL("http://localhost:5173");
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, "../dist/index.html")
-    );
-  }
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => { try { const link=new URL(url);if(['http:','https:'].includes(link.protocol))void shell.openExternal(link.href); } catch {} return {action:'deny'}; });
+  mainWindow.webContents.on('will-navigate', (event, url) => { try { if (new URL(url).origin !== target.origin) event.preventDefault(); } catch { event.preventDefault(); } });
+  mainWindow.loadURL(applicationURL);
 }
 
 app.whenReady().then(() => {

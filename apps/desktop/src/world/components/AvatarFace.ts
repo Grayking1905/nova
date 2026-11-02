@@ -12,7 +12,7 @@ export function drawAvatarFace(c:AvatarContext,avatar:Avatar,p:AvatarPose) {
   oval(c,-6,-13,11,6,'#ffffff0b');
   c.save();c.globalAlpha=1-p.back;
   const look=p.facing*4;
-  const blink=Math.max(.09,1-p.blink);
+  const blink=Math.max(.09,1-Math.max(p.blink,p.sleep*.9,p.laugh*.8));
   const eye=(x:number,small=false)=>{
     const w=small?1.65:2.3;
     if(blink<.3)stroke(c,[[x-w-1,3],[x+w+1,3]],'#493847',1.7);
@@ -22,6 +22,7 @@ export function drawAvatarFace(c:AvatarContext,avatar:Avatar,p:AvatarPose) {
   eye(-7+look,p.facing>.5);eye(8+look,p.facing<-.5);
   oval(c,-12+look,8,4,2.2,'#d5797a28');oval(c,13+look,8,4,2.2,'#d5797a28');
   oval(c,look+profile*3*Math.sign(p.facing),7,2,2.7,'#8a584323');
+  if(p.surprise>.2)oval(c,look+1,12,2.7,3.8,'#784d50');
   c.beginPath();c.moveTo(-3+look,11);c.quadraticCurveTo(1+look,14+p.celebrate*3,5+look,10.5);c.strokeStyle='#784d50';c.lineWidth=1.6;c.lineCap='round';c.stroke();
   c.restore();c.restore();
 }

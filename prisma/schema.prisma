@@ -19,6 +19,7 @@ model Workspace {
   spaces       Space[]
   state        WorkspaceState?
   assets       Asset[]
+  members      WorkspaceMember[]
 }
 
 model Space {
@@ -41,6 +42,7 @@ model WorkspaceState {
   notes         Json      @default("[]")
   boards        Json      @default("{}")
   fixtureStates Json      @default("{}")
+  library       Json      @default("{\"folders\":[],\"files\":[]}")
   updatedAt     DateTime  @updatedAt
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
@@ -49,9 +51,52 @@ model Asset {
   id          String    @id
   workspaceId String
   type        String
+  purpose     String    @default("presentation")
   data        Bytes
   createdAt   DateTime  @default(now())
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  username       String   @unique
+  name           String
+  passwordHash   String
+  dateOfBirth    DateTime? @db.Date
+  bio            String   @default("")
+  jobTitle       String   @default("")
+  company        String   @default("")
+  avatar         Json     @default("{}")
+  photoData      Bytes?
+  photoUpdatedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sessions       AuthSession[]
+  memberships    WorkspaceMember[]
+}
+
+model AuthSession {
+  tokenHash String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        String    @default("member")
+  joinedAt    DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
 }

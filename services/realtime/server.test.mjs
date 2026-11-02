@@ -13,6 +13,39 @@ async function client(address,options={}) {
   const send=message=>socket.send(JSON.stringify(message));send({type:'join',roomId:'nova-campus',profile:{name:'Tester'},...options});return{socket,send,wait,queue};
 }
 
+test('bookshelves share nested folders and files within one workplace only',async t=>{
+  const {address,base}=await setup(t);const a=await client(address,{create:true,roomName:'Library QA'}),aw=await a.wait('welcome');
+  const b=await client(address,{roomId:aw.room.id}),bw=await b.wait('welcome');
+  const outsider=await client(address),ow=await outsider.wait('welcome');
+  const shelf=fixtures.find(f=>f.type==='shelf');
+  const call=(path,token,method='GET',data)=>fetch(`${base}/library${path}`,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+  assert.equal((await call('','missing')).status,401);
+  let response=await call('/folders',aw.token,'POST',{name:'Important',shelfId:shelf.id});assert.equal(response.status,200);
+  const folder=(await response.json()).folders[0];assert.equal((await b.wait('library')).library.folders[0].id,folder.id);await a.wait('library');
+  response=await call('/folders',aw.token,'POST',{name:'Briefs',shelfId:shelf.id,folderId:folder.id});const child=(await response.json()).folders.find(f=>f.name==='Briefs');await a.wait('library');await b.wait('library');
+  response=await fetch(`${base}/library/upload`,{method:'POST',headers:{Authorization:`Bearer ${aw.token}`,'Content-Type':'text/plain','X-File-Name':encodeURIComponent('Project brief.txt'),'X-Folder-Id':child.id,'X-Shelf-Id':shelf.id},body:'Important shared project brief'});
+  assert.equal(response.status,200);const file=(await response.json()).files[0];assert.equal((await b.wait('library')).library.files[0].name,'Project brief.txt');await a.wait('library');
+  const download=await fetch(`${base}/assets/${file.id}`,{headers:{Authorization:`Bearer ${bw.token}`}});assert.equal(await download.text(),'Important shared project brief');assert.match(download.headers.get('content-disposition'),/attachment/);
+  assert.equal((await fetch(`${base}/assets/${file.id}`,{headers:{Authorization:`Bearer ${ow.token}`}})).status,404);
+  assert.equal((await call('',ow.token)).status,200);assert.equal((await (await call('',ow.token)).json()).files.length,0);
+  assert.equal((await call(`/files/${file.id}`,ow.token,'DELETE')).status,404);
+  assert.equal((await call(`/folders/${child.id}`,aw.token,'DELETE')).status,409);
+  assert.equal((await call('/links',aw.token,'POST',{name:'Unsafe',url:'javascript:alert(1)',shelfId:shelf.id})).status,400);
+  assert.equal((await call('/links',aw.token,'POST',{name:'Team handbook',url:'https://example.com/handbook',shelfId:shelf.id})).status,200);await a.wait('library');await b.wait('library');
+  const moved=await call(`/files/${file.id}/move`,bw.token,'POST',{folderId:folder.id,shelfId:shelf.id});assert.equal(moved.status,200);assert.equal((await moved.json()).files.find(f=>f.id===file.id).folderId,folder.id);await a.wait('library');await b.wait('library');
+  assert.equal((await call(`/files/${file.id}`,bw.token,'DELETE')).status,200);await a.wait('library');await b.wait('library');
+  assert.equal((await fetch(`${base}/assets/${file.id}`,{headers:{Authorization:`Bearer ${aw.token}`}})).status,404);
+  assert.ok(!outsider.queue.some(event=>event.type==='library'));
+});
+
+test('wardrobe choices and all sixteen reactions are validated and shared',async t=>{
+  const {address}=await setup(t);const a=await client(address,{profile:{name:'Maker',style:'bun',outfit:'overalls',accessory:'headphones',pants:'#123456',shoes:'#654321'}});const aw=await a.wait('welcome');
+  assert.equal(aw.players[0].style,'bun');assert.equal(aw.players[0].outfit,'overalls');assert.equal(aw.players[0].accessory,'headphones');
+  const b=await client(address);await b.wait('welcome');await a.wait('player');
+  for(const emoji of ['👋','👏','💜','🎉','👍','💡','💃','😂','☕','🤔','🙌','❤️','😮','😴','🔥','🤝']){a.send({type:'status',reaction:emoji});assert.equal((await b.wait('player')).player.reaction,emoji);}
+  a.send({type:'profile',profile:{name:'Safe',style:'invalid',outfit:'invalid',accessory:'invalid',pants:'bad'}});const safe=(await b.wait('player')).player;assert.equal(safe.style,'short');assert.equal(safe.outfit,'crew');assert.equal(safe.accessory,'none');assert.equal(safe.pants,'#3b435e');
+});
+
 test('two participants synchronize movement, chat, reactions, whiteboard, and signaling',async t=>{
   const {address}=await setup(t);const a=await client(address,{profile:{name:'Alice'}});const aw=await a.wait('welcome');const b=await client(address,{profile:{name:'Bob'}});const bw=await b.wait('welcome');assert.equal(bw.players.length,2);assert.equal((await a.wait('player')).player.name,'Bob');
   a.send({type:'move',x:123,y:234,direction:'left',moving:true});const moved=await b.wait('player');assert.equal(moved.player.x,123);assert.equal(moved.player.id,aw.id);

@@ -45,18 +45,18 @@ for(const z of zones) {
     add(z,id,'board',300,85,460,78,'Open shared whiteboard');
     conference(z,z.id);
     add(z,`${z.id}-screen`,'screen',60,220,115,80,'Present to this room');
-    add(z,`${z.id}-shelf`,'shelf',820,260,145,54,'Browse the bookshelf');
+    add(z,`${z.id}-shelf`,'shelf',820,260,145,54,'Open shared resource library');
     if(z.id==='sprint')add(z,'sprint-notices','noticeboard',810,145,122,91,'Read team moments');
   } else if(z.id==='work') {
     for(let row=0;row<2;row++)for(let col=0;col<4;col++) {
       const n=row*4+col+1,x=70+col*240,y=175+row*240;
-      add(z,`desk-${n}`,'desk',x,y,180,80,'Share at this workstation');
+      add(z,`desk-${n}`,'desk',x,y,180,80,'Start a focus session');
       seat(z,`desk-chair-${n}`,x+64,y+140);
     }
   } else if(z.id==='hub') {
     add(z,'reception','table',385,190,290,105,'Say hello',undefined,'reception');
     add(z,'hub-directory','noticeboard',810,195,122,130,'Explore campus');
-    add(z,'hub-books','shelf',65,365,145,54,'Browse the bookshelf');
+    add(z,'hub-books','shelf',65,365,145,54,'Open shared resource library');
     add(z,'hub-sofa','sofa',355,430,350,83,undefined,'#aaa08b');
     [250,420,590,760].forEach((x,i)=>{seat(z,`hub-seat-a-${i}`,x,340);seat(z,`hub-seat-b-${i}`,x,525);});
   } else if(z.id==='garden') {
@@ -64,7 +64,7 @@ for(const z of zones) {
     add(z,'garden-bench','sofa',345,140,370,80,undefined,'#568f79');
     add(z,'garden-table','table',105,285,140,85);
     for(let i=0;i<4;i++){seat(z,`garden-west-${i}`,290,245+i*80);seat(z,`garden-east-${i}`,730,245+i*80);}
-    add(z,'garden-books','shelf',820,300,140,54,'Browse the bookshelf');
+    add(z,'garden-books','shelf',820,300,140,54,'Open shared resource library');
   } else if(z.id==='lounge') {
     add(z,'cafe','coffee',350,80,350,105,'Brew a coffee');
     add(z,'lounge-sofa','sofa',135,265,310,85,undefined,'#bd8379');
@@ -74,7 +74,7 @@ for(const z of zones) {
     [125,390,605,870].forEach((x,i)=>{seat(z,`lounge-seat-a-${i}`,x,370);seat(z,`lounge-seat-b-${i}`,x,525);});
     add(z,'lounge-arcade','arcade',60,115,92,112,'Play a quick break game');
   } else if(z.id==='library') {
-    [110,375,640].forEach((x,i)=>add(z,`library-shelf-${i}`,'shelf',x,130,180,65,'Browse the bookshelf'));
+    [110,375,640].forEach((x,i)=>add(z,`library-shelf-${i}`,'shelf',x,130,180,65,'Open shared resource library'));
     add(z,'library-table','table',365,320,330,120,undefined,undefined,'conference');
     [240,410,580,750].forEach((x,i)=>{seat(z,`library-seat-a-${i}`,x,245);seat(z,`library-seat-b-${i}`,x,500);});
     add(z,'library-sofa','sofa',820,270,150,85,undefined,'#b49782');

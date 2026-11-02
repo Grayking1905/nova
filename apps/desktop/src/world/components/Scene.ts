@@ -1,3 +1,4 @@
+import { drawComponentFeedback } from './ComponentFeedback';
 import { fixtures } from '../map';
 import type { Fixture } from '../map';
 import type { Player, WorldInteraction } from '../../types';
@@ -25,7 +26,7 @@ export function createScene() {
         if(layer.kind==='player'){
           const p=layer.p;let motion=avatarMotions.get(p.id);if(!motion){motion=createAvatarMotion(p.id,p.x,p.y);avatarMotions.set(p.id,motion);}
           const pose=advanceAvatarMotion(motion,{...p,reactionAge:now-p.reactionAt},tick,reducedMotion);
-          drawAvatar(c,p,p.x,p.y,{pose,tick:reducedMotion?0:tick,selected:p.id===selfId});continue;
+          drawAvatar(c,p,p.x,p.y,{pose,tick:reducedMotion?0:tick,selected:p.id===selfId,reducedMotion});continue;
         }
         const f=layer.f,model=componentModels[f.type];
         const event=interactions.findLast(event=>event.fixtureId===f.id&&now-event.startedAt<2400);
@@ -37,6 +38,7 @@ export function createScene() {
         const pose=model.pose?.(frame)||{};
         c.save();c.translate(f.x+f.w/2,f.y+f.h/2+(pose.y||0));c.rotate(pose.angle||0);c.scale(pose.scale||1,pose.scale||1);c.drawImage(sprites.get(f.id)!,-f.w/2-40,-f.h/2-55);c.restore();
         model.animate?.(c,f,frame);
+        drawComponentFeedback(c,f,frame);
       }
       for(const player of players)drawPlayerLabel(c,player,player.id===selfId,tick,bubble(player.id));
     },
